@@ -1,0 +1,42 @@
+{
+  "name": "android_crash_fix_agent",
+  "agents": ["android_crash_intake_analyst", "android_codebase_investigator", "android_fix_planner", "android_crash_fix_pr_report_wr"],
+  "tasks": [
+    {
+      "name": "analyze_the_provided_android_task",
+      "description": "Analyze the provided Android crash details. Extract the exception type, failing method or class if visible, stack trace signals, likely affected Android layer, severity, reproduction clues, device or OS clues, app version clues, and missing information. Clearly separate confirmed facts from assumptions. Crash title: {crash_title}. Stack trace: {stack_trace}. Device info: {device_info}. App version: {app_version}. Reproduction steps: {reproduction_steps}. Android project path: {android_project_path}",
+      "expected_output": "A structured markdown crash intake report with sections: Summary, Confirmed Facts, Assumptions, Exception Type, Stack Trace Signals, Likely Affected Layer, Severity, Reproduction Clues, Missing Information, and Next Investigation Steps.",
+      "agent": "android_crash_intake_analyst"
+    }
+,
+    {
+      "name": "using_the_crash_intake_task",
+      "description": "Using the crash intake report and Android project path, investigate which source files and Android components are likely related to the crash. Identify likely packages, classes, Composables, ViewModels, Repositories, UseCases, Activities, Fragments, navigation routes, resources, or dependency injection modules to inspect. If actual file access is not available, infer likely file locations from the stack trace and explain what should be searched in the project.",
+      "expected_output": "A structured markdown codebase investigation report with sections: Relevant Files, Relevant Components, Architecture Area, Search Queries To Run, Likely Root Cause Candidates, Evidence From Stack Trace, and Files To Inspect First.",
+      "agent": "android_codebase_investigator",
+      "context": ["analyze_the_provided_android_task"]
+    }
+,
+    {
+      "name": "create_a_safe_and_task",
+      "description": "Create a safe and minimal Android crash fix plan using the crash intake and codebase investigation. Identify the most likely root cause, exact files or components to modify, recommended Kotlin or Compose changes, validation steps, tests to add, manual QA steps, and risks of the proposed fix. Avoid broad refactors and avoid changing unrelated behavior.",
+      "expected_output": "A structured markdown fix plan with sections: Likely Root Cause, Proposed Fix, Files To Modify, Kotlin or Compose Change Notes, Tests To Add, Manual QA Steps, Risks, Rollback Plan, and Acceptance Criteria.",
+      "agent": "android_fix_planner",
+      "context": ["analyze_the_provided_android_task", "using_the_crash_intake_task"]
+    }
+,
+    {
+      "name": "create_a_final_prready_task",
+      "description": "Create a final PR-ready crash investigation report from the crash intake, codebase investigation, and fix plan. The report should be useful for a human Android developer who will manually review and implement or approve the fix.",
+      "expected_output": "A final markdown PR report with sections: Title, Executive Summary, Crash Details, Root Cause Hypothesis, Proposed Fix Summary, Files To Review, Test Plan, Manual QA Checklist, Risk Level, Reviewer Checklist, and PR Description.",
+      "agent": "android_crash_fix_pr_report_wr",
+      "context": ["analyze_the_provided_android_task", "using_the_crash_intake_task", "create_a_safe_and_task"]
+    }
+
+  ],
+
+  "process": "sequential",
+  "verbose": true,
+  "memory": false,
+  "inputs": {}
+}
