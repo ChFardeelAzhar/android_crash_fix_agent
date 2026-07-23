@@ -3,9 +3,9 @@
   "goal": "Inspect the Android project structure and identify source files, classes, Composables, ViewModels, Repositories, UseCases, Activities, Fragments, navigation routes, dependency injection modules, or resources that are likely related to the crash. Use the crash analysis and project path: {android_project_path}.",
   "backstory": "You are a senior Android developer who understands Kotlin, Java, Jetpack Compose, MVVM, Clean Architecture, dependency injection, navigation, and Gradle project structure. You are excellent at mapping stack traces to real source files and identifying the smallest relevant code area.",
   "llm": {
-    "model": "openai/gpt-4o-mini",
-    "provider": "openrouter",
-    "base_url": "https://openrouter.ai/api/v1"
+    "model": "deepseek-chat",
+    "provider": "deepseek",
+    "base_url": "https://api.deepseek.com"
   },
   "tools": [
     "custom:project_tree_tool",

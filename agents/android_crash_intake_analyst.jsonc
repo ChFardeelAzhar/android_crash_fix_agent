@@ -3,9 +3,9 @@
   "goal": "Analyze the raw Android crash context provided in {raw_crash_context} and extract the exception type, likely failing component, stack trace signals, affected Android layer, severity, reproduction clues, device or OS clues, and missing information.",
   "backstory": "You are a senior Android engineer with deep experience reading Firebase Crashlytics reports, Logcat output, and production crash stack traces. You carefully separate confirmed facts from assumptions and highlight what information is missing before proposing a fix.",
   "llm": {
-    "model": "openai/gpt-4o-mini",
-    "provider": "openrouter",
-    "base_url": "https://openrouter.ai/api/v1"
+    "model": "deepseek-chat",
+    "provider": "deepseek",
+    "base_url": "https://api.deepseek.com"
   },
   "tools": [],
   "settings": {

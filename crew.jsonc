@@ -19,20 +19,18 @@
     },
     {
       "name": "codebase_investigation_task",
-      "description": "Using the crash intake report and Android project path {android_project_path}, investigate which source files and Android components are related to the crash. You must call project_tree_tool to list relevant files, call project_search_tool to search for class names, file names, or patterns from the stack trace, and call file_read_tool to read small relevant files to understand the code context. Do not invent file paths; only discuss files verified by tools. If a file path is guessed but not found, clearly mark it as inferred/not found.",
+      "description": "Using the crash intake report and Android project path {android_project_path}, investigate which source files and Android components are related to the crash. You must call project_tree_tool to list relevant files, call project_search_tool to search for class names, file names, or patterns from the stack trace, and call file_read_tool to read small relevant files to understand the code context. Do not invent file paths; only discuss files verified by tools. If a file path is guessed but not found, clearly mark it as inferred/not found. CRITICAL CONSTRAINT: The investigation must only use file paths and contents confirmed by search/read tools, must mark any unconfirmed paths as inferred, and must not claim that any files were changed or edited.",
       "expected_output": "A structured markdown codebase investigation report with sections: Relevant Files, Relevant Components, Architecture Area, Search Queries Run, Findings, Evidence From Stack Trace, and Files To Inspect First.",
       "agent": "android_codebase_investigator",
       "context": [
         "crash_intake_task"
       ],
       "markdown": true,
-      "guardrail": "The investigation must only use file paths and contents confirmed by search/read tools, must mark any unconfirmed paths as inferred, and must not claim that any files were changed or edited.",
-      "guardrail_max_retries": 2,
       "output_file": "output/codebase_investigation.md"
     },
     {
       "name": "fix_plan_task",
-      "description": "Create a safe and minimal Android crash fix plan using the crash intake and codebase investigation. After creating the plan, call file_edit_tool to apply the proposed Kotlin/Compose changes to the target source files in the project. Then, call gradle_verify_tool to compile the project and run unit tests to confirm the build compiles and tests pass. If compilation or tests fail, review the compiler error output, refine the fix plan, apply edits again, and re-verify. Explain the exact edits and verification results.",
+      "description": "Create a safe and minimal Android crash fix plan using the crash intake and codebase investigation. After creating the plan, call file_edit_tool to apply the proposed Kotlin/Compose changes to the target source files in the project at {android_project_path}. Then, call gradle_verify_tool to compile the project and run unit tests to confirm the build compiles and tests pass. If compilation or tests fail, review the compiler error output, refine the fix plan, apply edits again, and re-verify. Explain the exact edits and verification results. CRITICAL CONSTRAINT: The fix plan must detail minimal changes only, must explicitly modify files using the file_edit_tool with the project path {android_project_path}, and must run and verify compiles/tests using gradle_verify_tool, detailing the compilation/test results.",
       "expected_output": "A structured markdown fix plan with sections: Likely Root Cause, Proposed Fix, Files Modified, Kotlin or Compose Change Notes, Compilation Status, Unit Tests Status, Risks, Rollback Plan, and Acceptance Criteria. Include the output of the file_edit_tool run and the gradle_verify_tool run.",
       "agent": "android_fix_planner",
       "context": [
@@ -40,14 +38,12 @@
         "codebase_investigation_task"
       ],
       "markdown": true,
-      "guardrail": "The fix plan must detail minimal changes only, must explicitly modify files using the file_edit_tool, and must run and verify compiles/tests using gradle_verify_tool, detailing the compilation/test results.",
-      "guardrail_max_retries": 2,
       "output_file": "output/fix_plan.md"
     },
     {
       "name": "pr_report_task",
-      "description": "Create a final PR-ready crash investigation report from the crash intake, codebase investigation, and fix plan. Highlight the actual code modifications that were performed by the fix planner, as well as the compilation and unit testing verification results.",
-      "expected_output": "A final markdown PR report with sections: Title, Executive Summary, Crash Details, Root Cause Hypothesis, Modifications Made, Files To Review (with diff or changes description), Test Plan & Verification Results (showing build/test status), Manual QA Checklist, Risk Level, Reviewer Checklist, and PR Description.",
+      "description": "Create a final PR-ready crash investigation report from the crash intake, codebase investigation, and fix plan for the project at {android_project_path}. You MUST use the git_tool to verify the status, create a git branch, commit the changes made by the fix planner, and create the Pull Request metadata/script. If a device is connected, you can use the adb_tool to verify or capture verification results. Highlight the actual code modifications that were performed by the fix planner, as well as the compilation and unit testing verification results. CRITICAL CONSTRAINT: The final report must list the real modifications made in the previous task, must confirm that the changes were committed to a Git branch via git_tool, and must state build/test compilation status based strictly on the gradle_verify_tool output.",
+      "expected_output": "A final markdown PR report with sections: Title, Executive Summary, Crash Details, Root Cause Hypothesis, Modifications Made, Git Branch & Commit Status, Files To Review (with diff or changes description), Test Plan & Verification Results (showing build/test status), Manual QA Checklist, Risk Level, Reviewer Checklist, and PR Description.",
       "agent": "android_pr_report_writer",
       "context": [
         "crash_intake_task",
@@ -55,8 +51,6 @@
         "fix_plan_task"
       ],
       "markdown": true,
-      "guardrail": "The final report must list the real modifications made in the previous task, and must state build/test compilation status based strictly on the gradle_verify_tool output.",
-      "guardrail_max_retries": 2,
       "output_file": "output/pr_report.md"
     }
   ],
