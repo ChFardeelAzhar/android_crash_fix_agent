@@ -1,42 +1,70 @@
 {
   "name": "android_crash_fix_agent",
-  "agents": ["android_crash_intake_analyst", "android_codebase_investigator", "android_fix_planner", "android_crash_fix_pr_report_wr"],
+  "agents": [
+    "android_crash_intake_analyst",
+    "android_codebase_investigator",
+    "android_fix_planner",
+    "android_pr_report_writer"
+  ],
   "tasks": [
     {
-      "name": "analyze_the_provided_android_task",
-      "description": "Analyze the provided Android crash details. Extract the exception type, failing method or class if visible, stack trace signals, likely affected Android layer, severity, reproduction clues, device or OS clues, app version clues, and missing information. Clearly separate confirmed facts from assumptions. Crash title: {crash_title}. Stack trace: {stack_trace}. Device info: {device_info}. App version: {app_version}. Reproduction steps: {reproduction_steps}. Android project path: {android_project_path}",
+      "name": "crash_intake_task",
+      "description": "Analyze the raw Android crash context provided in {raw_crash_context}. Parse and extract the exception type, failing method or class, stack trace signals, likely affected Android layer, severity, reproduction clues, device or OS clues, app version clues, and missing information. Clearly separate confirmed facts from assumptions.",
       "expected_output": "A structured markdown crash intake report with sections: Summary, Confirmed Facts, Assumptions, Exception Type, Stack Trace Signals, Likely Affected Layer, Severity, Reproduction Clues, Missing Information, and Next Investigation Steps.",
-      "agent": "android_crash_intake_analyst"
-    }
-,
+      "agent": "android_crash_intake_analyst",
+      "markdown": true,
+      // "guardrail": "The report must separate confirmed facts from assumptions and must not invent stack trace details that were not provided in raw_crash_context.",
+      "guardrail_max_retries": 2,
+      "output_file": "output/crash_intake_report.md"
+    },
     {
-      "name": "using_the_crash_intake_task",
-      "description": "Using the crash intake report and Android project path, investigate which source files and Android components are likely related to the crash. Identify likely packages, classes, Composables, ViewModels, Repositories, UseCases, Activities, Fragments, navigation routes, resources, or dependency injection modules to inspect. If actual file access is not available, infer likely file locations from the stack trace and explain what should be searched in the project.",
-      "expected_output": "A structured markdown codebase investigation report with sections: Relevant Files, Relevant Components, Architecture Area, Search Queries To Run, Likely Root Cause Candidates, Evidence From Stack Trace, and Files To Inspect First.",
+      "name": "codebase_investigation_task",
+      "description": "Using the crash intake report and Android project path {android_project_path}, investigate which source files and Android components are related to the crash. You must call project_tree_tool to list relevant files, call project_search_tool to search for class names, file names, or patterns from the stack trace, and call file_read_tool to read small relevant files to understand the code context. Do not invent file paths; only discuss files verified by tools. If a file path is guessed but not found, clearly mark it as inferred/not found.",
+      "expected_output": "A structured markdown codebase investigation report with sections: Relevant Files, Relevant Components, Architecture Area, Search Queries Run, Findings, Evidence From Stack Trace, and Files To Inspect First.",
       "agent": "android_codebase_investigator",
-      "context": ["analyze_the_provided_android_task"]
-    }
-,
+      "context": [
+        "crash_intake_task"
+      ],
+      "markdown": true,
+      "guardrail": "The investigation must only use file paths and contents confirmed by search/read tools, must mark any unconfirmed paths as inferred, and must not claim that any files were changed or edited.",
+      "guardrail_max_retries": 2,
+      "output_file": "output/codebase_investigation.md"
+    },
     {
-      "name": "create_a_safe_and_task",
-      "description": "Create a safe and minimal Android crash fix plan using the crash intake and codebase investigation. Identify the most likely root cause, exact files or components to modify, recommended Kotlin or Compose changes, validation steps, tests to add, manual QA steps, and risks of the proposed fix. Avoid broad refactors and avoid changing unrelated behavior.",
-      "expected_output": "A structured markdown fix plan with sections: Likely Root Cause, Proposed Fix, Files To Modify, Kotlin or Compose Change Notes, Tests To Add, Manual QA Steps, Risks, Rollback Plan, and Acceptance Criteria.",
+      "name": "fix_plan_task",
+      "description": "Create a safe and minimal Android crash fix plan using the crash intake and codebase investigation. After creating the plan, call file_edit_tool to apply the proposed Kotlin/Compose changes to the target source files in the project. Then, call gradle_verify_tool to compile the project and run unit tests to confirm the build compiles and tests pass. If compilation or tests fail, review the compiler error output, refine the fix plan, apply edits again, and re-verify. Explain the exact edits and verification results.",
+      "expected_output": "A structured markdown fix plan with sections: Likely Root Cause, Proposed Fix, Files Modified, Kotlin or Compose Change Notes, Compilation Status, Unit Tests Status, Risks, Rollback Plan, and Acceptance Criteria. Include the output of the file_edit_tool run and the gradle_verify_tool run.",
       "agent": "android_fix_planner",
-      "context": ["analyze_the_provided_android_task", "using_the_crash_intake_task"]
-    }
-,
+      "context": [
+        "crash_intake_task",
+        "codebase_investigation_task"
+      ],
+      "markdown": true,
+      "guardrail": "The fix plan must detail minimal changes only, must explicitly modify files using the file_edit_tool, and must run and verify compiles/tests using gradle_verify_tool, detailing the compilation/test results.",
+      "guardrail_max_retries": 2,
+      "output_file": "output/fix_plan.md"
+    },
     {
-      "name": "create_a_final_prready_task",
-      "description": "Create a final PR-ready crash investigation report from the crash intake, codebase investigation, and fix plan. The report should be useful for a human Android developer who will manually review and implement or approve the fix.",
-      "expected_output": "A final markdown PR report with sections: Title, Executive Summary, Crash Details, Root Cause Hypothesis, Proposed Fix Summary, Files To Review, Test Plan, Manual QA Checklist, Risk Level, Reviewer Checklist, and PR Description.",
-      "agent": "android_crash_fix_pr_report_wr",
-      "context": ["analyze_the_provided_android_task", "using_the_crash_intake_task", "create_a_safe_and_task"]
+      "name": "pr_report_task",
+      "description": "Create a final PR-ready crash investigation report from the crash intake, codebase investigation, and fix plan. Highlight the actual code modifications that were performed by the fix planner, as well as the compilation and unit testing verification results.",
+      "expected_output": "A final markdown PR report with sections: Title, Executive Summary, Crash Details, Root Cause Hypothesis, Modifications Made, Files To Review (with diff or changes description), Test Plan & Verification Results (showing build/test status), Manual QA Checklist, Risk Level, Reviewer Checklist, and PR Description.",
+      "agent": "android_pr_report_writer",
+      "context": [
+        "crash_intake_task",
+        "codebase_investigation_task",
+        "fix_plan_task"
+      ],
+      "markdown": true,
+      "guardrail": "The final report must list the real modifications made in the previous task, and must state build/test compilation status based strictly on the gradle_verify_tool output.",
+      "guardrail_max_retries": 2,
+      "output_file": "output/pr_report.md"
     }
-
   ],
-
   "process": "sequential",
   "verbose": true,
   "memory": false,
-  "inputs": {}
+  "inputs": {
+    "raw_crash_context": "",
+    "android_project_path": "/Users/retailopakistan/Documents/tp-app"
+  }
 }

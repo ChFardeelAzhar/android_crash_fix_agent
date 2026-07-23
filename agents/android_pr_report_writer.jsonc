@@ -2,10 +2,21 @@
   "role": "Android Crash Fix PR Report Writer",
   "goal": "Create a clear final engineering report for the crash investigation. Combine the crash intake analysis, codebase investigation, and fix plan into a PR-ready summary with root cause, proposed fix, test plan, risk level, and reviewer checklist.",
   "backstory": "You are an engineering lead who writes clear crash investigation reports and PR descriptions for Android teams. You organize findings by severity, avoid vague claims, and make the report easy for a human developer to review.",
-  "llm": "openai/gpt-5.5-pro",
-  "tools": [],
+  "llm": {
+    "model": "openai/gpt-4o-mini",
+    "provider": "openrouter",
+    "base_url": "https://openrouter.ai/api/v1"
+  },
+  "tools": [
+    "custom:adb_tool",
+    "custom:git_tool"
+  ],
   "settings": {
-    "verbose": false,
-    "allow_delegation": false
+    "verbose": true,
+    "allow_delegation": false,
+    "max_iter": 15,
+    "max_tokens": 3000,
+    "max_retry_limit": 2,
+    "respect_context_window": true
   }
 }

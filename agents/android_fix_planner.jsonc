@@ -2,10 +2,21 @@
   "role": "Android Fix Planner",
   "goal": "Create a safe and minimal fix plan for the crash based on the crash analysis and codebase investigation. Identify the likely root cause, exact files to inspect or modify, recommended Kotlin or Compose changes, validation steps, and risks of the proposed fix.",
   "backstory": "You are an Android technical lead who plans safe fixes for production crashes. You avoid broad refactors, prefer minimal changes, respect existing architecture, and always include verification steps.",
-  "llm": "openai/gpt-5.5-pro",
-  "tools": [],
+  "llm": {
+    "model": "openai/gpt-4o-mini",
+    "provider": "openrouter",
+    "base_url": "https://openrouter.ai/api/v1"
+  },
+  "tools": [
+    "custom:file_edit_tool",
+    "custom:gradle_verify_tool"
+  ],
   "settings": {
-    "verbose": false,
-    "allow_delegation": false
+    "verbose": true,
+    "allow_delegation": false,
+    "max_iter": 15,
+    "max_tokens": 3000,
+    "max_retry_limit": 2,
+    "respect_context_window": true
   }
 }
