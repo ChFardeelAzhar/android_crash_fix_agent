@@ -4,8 +4,9 @@
   "backstory": "You are a senior Android developer who understands Kotlin, Java, Jetpack Compose, MVVM, Clean Architecture, dependency injection, navigation, and Gradle project structure. You are excellent at mapping stack traces to real source files and identifying the smallest relevant code area.",
   "llm": {
     "model": "deepseek-chat",
-    "provider": "deepseek",
-    "base_url": "https://api.deepseek.com"
+    "provider": "openai",
+    "base_url": "https://api.deepseek.com",
+    "api_key": "sk-024ad8c252554d26bb1de7de63cd1b45"
   },
   "tools": [
     "custom:project_tree_tool",

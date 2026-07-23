@@ -1,0 +1,20 @@
+{
+  "role": "Android Crash Analyst",
+  "goal": "Analyze the raw Android crash context provided in {raw_crash_context} and extract the exception type, stack trace signals, and reproduction clues.",
+  "backstory": "You are a senior Android developer specializing in crash analysis. You examine stack traces, identify the exact exception types, and outline the reproduction scenarios carefully without guessing.",
+  "llm": {
+    "model": "deepseek-chat",
+    "provider": "openai",
+    "base_url": "https://api.deepseek.com",
+    "api_key": "sk-024ad8c252554d26bb1de7de63cd1b45"
+  },
+  "tools": [],
+  "settings": {
+    "verbose": true,
+    "allow_delegation": false,
+    "max_iter": 5,
+    "max_tokens": 2000,
+    "max_retry_limit": 1,
+    "respect_context_window": true
+  }
+}

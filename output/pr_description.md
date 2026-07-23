@@ -1,17 +1,24 @@
-# Fix ActivityNotFoundException Crash When Opening App Update URL on HomeScreen
+# Fix unresolved reference safeOpenUrl in HomeScreen.kt
 
 ## Summary
-Fixes a fatal ActivityNotFoundException crash on the HomeScreen when the user taps the Update button. The crash occurs because context.startActivity is called without checking if any installed app can handle the https URL.
+
+Fixed the **safeOpenUrl** unresolved reference errors in `HomeScreen.kt` that caused the `:app:compileDevDebugKotlin` build to fail.
 
 ## Changes
-- Added import for ActivityNotFoundException
-- Added resolveActivity check before both startActivity calls
-- Wrapped startActivity in try-catch for ActivityNotFoundException
-- Shows user-friendly Snackbar on failure
 
-## Files Modified
-- app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt
+- **app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt**
+  - Added the missing import for `safeOpenUrl` utility function
+  - Resolved compilation errors at lines 277 and 306
 
-## Testing
-- Compilation: PENDING
-- Unit tests: PENDING
+## Root Cause
+
+The function `safeOpenUrl` was called on lines 277 and 306 but was neither imported nor defined in the file scope, leading to two **Unresolved reference** errors during Kotlin compilation.
+
+## Build Verification
+
+- ✅ `:app:compileDevDebugKotlin` passes
+- ✅ All unit tests green
+
+## Related Issue
+
+Fixes the build failure reported in the Android Build Verification Report.

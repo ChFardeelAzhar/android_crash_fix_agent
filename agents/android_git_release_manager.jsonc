@@ -1,0 +1,22 @@
+{
+  "role": "Android Git & Release Manager",
+  "goal": "Manage repository branches, stage and commit verified changes, and prepare PR descriptions. Project path: {android_project_path}.",
+  "backstory": "You are a release manager who handles git branches, stages modifications, commits changes with descriptive messages, and generates git compare workflows.",
+  "llm": {
+    "model": "deepseek-chat",
+    "provider": "openai",
+    "base_url": "https://api.deepseek.com",
+    "api_key": "sk-024ad8c252554d26bb1de7de63cd1b45"
+  },
+  "tools": [
+    "custom:git_tool"
+  ],
+  "settings": {
+    "verbose": true,
+    "allow_delegation": false,
+    "max_iter": 8,
+    "max_tokens": 3000,
+    "max_retry_limit": 2,
+    "respect_context_window": true
+  }
+}

@@ -1,20 +1,22 @@
 {
   "name": "android_crash_fix_agent",
   "agents": [
-    "android_crash_intake_analyst",
+    "android_crash_analyst",
     "android_codebase_investigator",
-    "android_fix_planner",
-    "android_pr_report_writer"
+    "android_fix_architect",
+    "android_code_modifier",
+    "android_build_verifier",
+    "android_device_operator",
+    "android_git_release_manager",
+    "android_pr_report_compiler"
   ],
   "tasks": [
     {
       "name": "crash_intake_task",
       "description": "Analyze the raw Android crash context provided in {raw_crash_context}. Parse and extract the exception type, failing method or class, stack trace signals, likely affected Android layer, severity, reproduction clues, device or OS clues, app version clues, and missing information. Clearly separate confirmed facts from assumptions.",
       "expected_output": "A structured markdown crash intake report with sections: Summary, Confirmed Facts, Assumptions, Exception Type, Stack Trace Signals, Likely Affected Layer, Severity, Reproduction Clues, Missing Information, and Next Investigation Steps.",
-      "agent": "android_crash_intake_analyst",
+      "agent": "android_crash_analyst",
       "markdown": true,
-      // "guardrail": "The report must separate confirmed facts from assumptions and must not invent stack trace details that were not provided in raw_crash_context.",
-      "guardrail_max_retries": 2,
       "output_file": "output/crash_intake_report.md"
     },
     {
@@ -29,10 +31,10 @@
       "output_file": "output/codebase_investigation.md"
     },
     {
-      "name": "fix_plan_task",
-      "description": "Create a safe and minimal Android crash fix plan using the crash intake and codebase investigation. After creating the plan, call file_edit_tool to apply the proposed Kotlin/Compose changes to the target source files in the project at {android_project_path}. Then, call gradle_verify_tool to compile the project and run unit tests to confirm the build compiles and tests pass. If compilation or tests fail, review the compiler error output, refine the fix plan, apply edits again, and re-verify. Explain the exact edits and verification results. CRITICAL CONSTRAINT: The fix plan must detail minimal changes only, must explicitly modify files using the file_edit_tool with the project path {android_project_path}, and must run and verify compiles/tests using gradle_verify_tool, detailing the compilation/test results.",
-      "expected_output": "A structured markdown fix plan with sections: Likely Root Cause, Proposed Fix, Files Modified, Kotlin or Compose Change Notes, Compilation Status, Unit Tests Status, Risks, Rollback Plan, and Acceptance Criteria. Include the output of the file_edit_tool run and the gradle_verify_tool run.",
-      "agent": "android_fix_planner",
+      "name": "fix_planning_task",
+      "description": "Using the crash intake report and codebase investigation report, analyze the target code logic and devise a safe and minimal Android crash fix plan. Identify the root cause, target files, recommended Kotlin or Compose edits, and validation checklist. The plan must contain the exact code blocks (Before and After) to be modified, including any required imports, so that the code modifier can apply them directly without ambiguity. CRITICAL CONSTRAINT: The fix plan must detail minimal changes only, providing exact search and replace blocks. Do not perform editing tools in this task, only plan the changes.",
+      "expected_output": "A structured markdown fix plan with sections: Root Cause, Proposed Fix, Files To Modify, and Validation Steps. Include the exact code blocks (Before and After) for each modification.",
+      "agent": "android_fix_architect",
       "context": [
         "crash_intake_task",
         "codebase_investigation_task"
@@ -41,14 +43,63 @@
       "output_file": "output/fix_plan.md"
     },
     {
-      "name": "pr_report_task",
-      "description": "Create a final PR-ready crash investigation report from the crash intake, codebase investigation, and fix plan for the project at {android_project_path}. You MUST use the git_tool to verify the status, create a git branch, commit the changes made by the fix planner, and create the Pull Request metadata/script. If a device is connected, you can use the adb_tool to verify or capture verification results. Highlight the actual code modifications that were performed by the fix planner, as well as the compilation and unit testing verification results. CRITICAL CONSTRAINT: The final report must list the real modifications made in the previous task, must confirm that the changes were committed to a Git branch via git_tool, and must state build/test compilation status based strictly on the gradle_verify_tool output.",
-      "expected_output": "A final markdown PR report with sections: Title, Executive Summary, Crash Details, Root Cause Hypothesis, Modifications Made, Git Branch & Commit Status, Files To Review (with diff or changes description), Test Plan & Verification Results (showing build/test status), Manual QA Checklist, Risk Level, Reviewer Checklist, and PR Description.",
-      "agent": "android_pr_report_writer",
+      "name": "code_modification_task",
+      "description": "Using the approved fix plan from fix_planning_task and project path {android_project_path}, modify the target files. You MUST read the target files first, identify the exact lines of code that need to be changed, and call file_edit_tool to apply the correct replacement code (such as the resolveActivity check/try-catch and required imports in app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt and app/src/main/AndroidManifest.xml). Do NOT make dummy replacements. Your replacement must solve the crash. CRITICAL CONSTRAINT: You must modify files strictly using the file_edit_tool and ensure the relative path and target/replacement code match exactly. Do not leave the file unchanged.",
+      "expected_output": "A markdown modification log showing which files were edited and the output results returned by the file_edit_tool.",
+      "agent": "android_code_modifier",
+      "context": [
+        "fix_planning_task"
+      ],
+      "markdown": true,
+      "output_file": "output/modification_result.md"
+    },
+    {
+      "name": "build_verification_task",
+      "description": "Using the modification log and project path {android_project_path}, run build verification checks. You MUST call gradle_verify_tool with tasks [':app:compileDevDebugKotlin', ':app:compileDevDebugUnitTestKotlin'] to compile the app module and execute unit tests. If the build or tests fail, report the exact compiler error messages. CRITICAL CONSTRAINT: The verifier must compile changes and run unit tests strictly using the gradle_verify_tool with the specific app tasks and record results.",
+      "expected_output": "A markdown verification report showing compilation status, exit codes, and unit test pass rates.",
+      "agent": "android_build_verifier",
+      "context": [
+        "code_modification_task"
+      ],
+      "markdown": true,
+      "output_file": "output/build_verification.md"
+    },
+    {
+      "name": "device_verification_task",
+      "description": "Using the build verification details, perform runtime and device checks. You MUST call adb_tool to list connected devices, launch the application if needed, and take verification screenshots to confirm device status. CRITICAL CONSTRAINT: You must use the adb_tool to capture device logs or take screenshots, and detail the captured artifacts.",
+      "expected_output": "A markdown device verification log listing screenshots captured, connected devices, and logcat highlights.",
+      "agent": "android_device_operator",
+      "context": [
+        "build_verification_task"
+      ],
+      "markdown": true,
+      "output_file": "output/device_verification.md"
+    },
+    {
+      "name": "git_release_task",
+      "description": "Using the modified files and project path {android_project_path}, perform Git repository management. You MUST call git_tool to check the status, create a fresh git branch for the fix, commit only the modified source code files with a clear message (ensure you ignore and do not commit any .bak backup files), and prepare the Pull Request metadata. CRITICAL CONSTRAINT: You must verify that the modifications are successfully committed to a new git branch using the git_tool.",
+      "expected_output": "A markdown git release report showing the created branch name, commit hash, and status of git changes.",
+      "agent": "android_git_release_manager",
+      "context": [
+        "code_modification_task",
+        "build_verification_task"
+      ],
+      "markdown": true,
+      "output_file": "output/git_release.md"
+    },
+    {
+      "name": "final_report_task",
+      "description": "Consolidate the crash intake, codebase investigation, fix planning, modification logs, build verification, device verification screenshots, and git release branch details into a final PR-ready engineering report for the project at {android_project_path}.",
+      "expected_output": "A final markdown PR report with sections: Title, Executive Summary, Crash Details, Root Cause Hypothesis, Modifications Made, Git Branch & Commit Status, Test Plan & Verification Results (showing build/test status), Manual QA Checklist, Risk Level, and Reviewer Checklist.",
+      "agent": "android_pr_report_compiler",
       "context": [
         "crash_intake_task",
         "codebase_investigation_task",
-        "fix_plan_task"
+        "fix_planning_task",
+        "code_modification_task",
+        "build_verification_task",
+        "device_verification_task",
+        "git_release_task"
       ],
       "markdown": true,
       "output_file": "output/pr_report.md"

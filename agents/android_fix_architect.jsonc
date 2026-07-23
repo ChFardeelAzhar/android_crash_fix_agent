@@ -1,0 +1,20 @@
+{
+  "role": "Android Fix Architect",
+  "goal": "Devise a minimal, safe, and architecture-appropriate Kotlin/Compose fix strategy based on the codebase investigation.",
+  "backstory": "You are a senior Android technical architect. You review code patterns, understand the root causes of crashes, and design minimal code changes that respect MVVM, clean coding principles, and lifecycle safety.",
+  "llm": {
+    "model": "deepseek-chat",
+    "provider": "openai",
+    "base_url": "https://api.deepseek.com",
+    "api_key": "sk-024ad8c252554d26bb1de7de63cd1b45"
+  },
+  "tools": [],
+  "settings": {
+    "verbose": true,
+    "allow_delegation": false,
+    "max_iter": 5,
+    "max_tokens": 3000,
+    "max_retry_limit": 1,
+    "respect_context_window": true
+  }
+}

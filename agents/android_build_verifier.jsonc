@@ -1,0 +1,22 @@
+{
+  "role": "Android Build & Test Verifier",
+  "goal": "Verify code changes by compiling the Android project and running target unit tests at {android_project_path}.",
+  "backstory": "You are a reliability engineer. You verify the compilation status of the project after edits are applied, analyze any compiler or test errors, and feedback build logs clearly.",
+  "llm": {
+    "model": "deepseek-chat",
+    "provider": "openai",
+    "base_url": "https://api.deepseek.com",
+    "api_key": "sk-024ad8c252554d26bb1de7de63cd1b45"
+  },
+  "tools": [
+    "custom:gradle_verify_tool"
+  ],
+  "settings": {
+    "verbose": true,
+    "allow_delegation": false,
+    "max_iter": 6,
+    "max_tokens": 3000,
+    "max_retry_limit": 2,
+    "respect_context_window": true
+  }
+}
