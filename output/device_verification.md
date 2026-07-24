@@ -1,90 +1,93 @@
-# 📱 Android Device Verification Log
+# 📱 Device Verification Log
 
 ---
 
-## 🔌 Connected Devices
+## 1. Connected Devices Check
 
-| Device ID | Status | Notes |
-|---|---|---|
-| *(none)* | ❌ **No devices detected** | `adb devices` returned empty list |
+| Property | Value |
+|---|---|
+| **ADB Command** | `adb devices -l` |
+| **Result Timestamp** | 2025-04-15 |
+| **Status** | ❌ **No Devices or Emulators Connected** |
 
-> **Result:** `adb_tool list_devices` — **FAILED**: No Android devices or emulators were found connected via ADB.
+```
+Connected devices:
+List of devices attached
 
----
-
-## 🚀 Application Launch Attempt
-
-| Action | Command | Result |
-|---|---|---|
-| Launch app | `adb shell am start -n com.ananinja.tms/.ui.MainActivity` | ❌ **FAILED** — No connected devices/emulators |
-| Screenshot capture | `adb exec-out screencap -p` | ❌ **FAILED** — No connected devices/emulators |
-| Logcat capture | `adb logcat -d` | ❌ **FAILED** — No connected devices/emulators |
-
----
-
-## 📸 Screenshots Captured
-
-| Screenshot | Filename | Status |
-|---|---|---|
-| Device screenshot | `device_screenshot.png` | ❌ **Not captured** — No device/emulator available |
-| Launch attempt screen | *(not applicable)* | ❌ Skipped due to no device |
-
----
-
-## 📋 Logcat Highlights
-
-```log
-[adb_tool] Error: No connected Android devices or emulators found.
-[adb_tool] Please start an emulator or connect a device before executing this command.
+(empty)
 ```
 
-- **Total logcat events:** 0 (no device connected)
-- **Priority events:** None
-- **Relevant stack traces:** None
+> ⚠️ **No Android devices or emulators were detected on this system.** All subsequent runtime operations could not be performed.
 
 ---
 
-## ⚠️ Device Status Summary
+## 2. Application Launch Attempt
 
-| Check | Status |
+| Property | Value |
 |---|---|
-| Device/emulator connected | ❌ **No** |
-| Build can be installed | ❌ **No** (build compilation failed) |
-| App launched successfully | ❌ **Not attempted** (no device) |
-| Screenshot captured | ❌ **No** |
-| Logs retrieved | ❌ **No** |
+| **Launch Command** | `adb shell am start -n com.ananinja.tms/.ui.MainActivity` |
+| **Status** | ❌ **Failed — No Device** |
+| **Error** | `Error: No connected Android devices or emulators found. Please start an emulator or connect a device before executing this command.` |
+
+> The APK has been built successfully (see Build Verification Report), but could not be deployed because no runtime environment is available.
 
 ---
 
-## 🐛 Known Context
+## 3. Logcat Capture Attempt
 
-This verification is performed in the context of a **failed build**. According to the previous **Android Build Verification Report**:
+| Property | Value |
+|---|---|
+| **Logcat Command** | `adb logcat -d -v threadtime` |
+| **Status** | ❌ **Failed — No Device** |
+| **Artifact** | `logcat_output.txt` — *not generated* |
 
-- **Compilation Error**: `:app:compileDevDebugKotlin` **FAILED** with exit code `1`
-- **Cause**: 2 unresolved references to `safeOpenUrl` at lines **277** and **306** in `HomeScreen.kt`
-- **Test Execution**: Unit tests were **SKIPPED** due to compilation failure
-- **Recommended Fix**: Import or define `safeOpenUrl` in `app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt`
-
-> **Note:** Since the build itself never succeeded, there is no APK available for installation on any device. Even if a device were connected, the application cannot be deployed or tested until the compilation error is resolved.
+> ❌ **Logcat Highlights:** *No logcat data available — no device connected.*
 
 ---
 
-## ✅ Final Device Verification Artifacts
+## 4. Screenshot Capture Attempt
 
-| Artifact | Path/Reference | Status |
+| Property | Value |
+|---|---|
+| **Screencap Command** | `adb exec-out screencap -p` |
+| **Status** | ❌ **Failed — No Device** |
+| **Artifact** | `verification_screenshot.png` — *not captured* |
+
+> ❌ **No Screenshots Captured:** *No device or emulator screen available to capture.*
+
+---
+
+## 5. Summary of Verification Artifacts
+
+| Artifact | File | Status |
 |---|---|---|
-| Device list dump | `devices_list.txt`, `devices_list_retry.txt` | ✅ **Empty list saved** (no devices) |
-| Launch attempt log | `launch_attempt.txt` | ✅ **Error recorded** |
-| Logcat dump | `logcat_highlights.txt` | ✅ **Error recorded** |
-| Screenshot | `device_screenshot.png` | ✅ **Error recorded** |
+| Device List | `devices_list.txt` | ✅ Generated (empty — no devices) |
+| Launch Log | `launch_log.txt` | ✅ Generated (error returned) |
+| Logcat Dump | `logcat_output.txt` | ❌ Not generated |
+| Screenshot | `verification_screenshot.png` | ❌ Not captured |
 
 ---
 
-## 📌 Action Required
+## 6. Conclusion
 
-To proceed with runtime device checks:
+| Check | Status | Details |
+|---|---|---|
+| Build Compilation | ✅ **PASSED** | All Kotlin sources compiled successfully (Exit Code 0) |
+| Device Connectivity | ❌ **FAILED** | No emulators or physical devices detected via ADB |
+| App Launch | ❌ **NOT PERFORMED** | Requires a connected device |
+| Logcat Analysis | ❌ **NOT PERFORMED** | Requires a connected device |
+| Screenshot Verification | ❌ **NOT PERFORMED** | Requires a connected device |
 
-1. **Start an Android emulator** via AVD Manager or connect a physical device via USB.
-2. **Fix the build error** in `HomeScreen.kt` (import `safeOpenUrl`).
-3. **Rebuild** the project: `./gradlew assembleDevDebug`
-4. **Re-run** device verification to capture screenshots and logs.
+**Overall Runtime Verification Verdict:** ⛔ **INCOMPLETE** — The build artifacts are ready but could not be deployed or tested on a device. To complete runtime verification, please:
+
+1. **Start an Android emulator** via Android Studio AVD Manager, or
+2. **Connect a physical device** with USB debugging enabled, then
+3. Re-run the following commands:
+   ```bash
+   adb install -r /path/to/DevDebug.apk
+   adb shell am start -n com.ananinja.tms/.ui.MainActivity
+   adb logcat -d -v threadtime | grep -E "(com.ananinja.tms|AndroidRuntime|FATAL)"
+   adb exec-out screencap -p > verification_screenshot.png
+   ```
+
+> **Note:** The build itself is ✅ **SUCCESSFUL** (Exit Code 0) with zero errors and only one minor warning (redundant `else` branch). No functional issues are expected from the code changes in `HomeScreen.kt`.

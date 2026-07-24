@@ -1,86 +1,98 @@
-# ✅ Android Git Release Report
+# 📋 Git Release Report
 
-## Branch Information
+---
+
+## ✅ Branch Created
 
 | Property | Value |
 |---|---|
-| **Branch Name** | `fix/safeOpenUrl-unresolved-reference` |
+| **Branch Name** | `fix/home-screen-scope` |
 | **Base Branch** | `staging` |
-| **Commit Hash** | `1bb9701` |
-| **Status** | ✅ Clean - nothing to commit, working tree clean |
+| **Project Path** | `/Users/retailopakistan/Documents/tp-app` |
 
 ---
 
-## Committed Changes
+## ✅ Commit Details
 
-| File | Status | Type |
-|---|---|---|
-| `app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt` | ✅ Modified | Source code fix |
+| Property | Value |
+|---|---|
+| **Commit Hash** | `285cfdc` |
+| **Commit Message** | `Add rememberCoroutineScope to HomeScreen for coroutine support` |
+| **Files Changed** | 1 |
+| **Insertions** | 1 |
+| **Deletions** | 0 |
 
-> ⚠️ **Note:** A `.bak` backup file (`HomeScreen.kt.bak`) was accidentally tracked in the initial commit and is now present in the repository. It has been excluded from further changes.
-
-### Commit Message
+### Modified File
 
 ```
-Fix unresolved reference safeOpenUrl in HomeScreen.kt
+app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt
 ```
 
-### Files Changed
-- `2 files changed, 362 insertions(+), 4 deletions(-)`
-- `create mode 100644 app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt.bak`
+**Change:** Added `val scope = rememberCoroutineScope()` just after `val snackbarHostState = remember { SnackbarHostState() }`.
 
 ---
 
-## Git Status Verification
+## ✅ Working Tree Status
 
 ```
-On branch fix/safeOpenUrl-unresolved-reference
+On branch fix/home-screen-scope
+Your branch is up to date with 'origin/fix/home-screen-scope'.
+
 nothing to commit, working tree clean
 ```
 
+> ✅ All modifications have been **committed** and **pushed** to remote. No `.bak` backup files were included.
+
 ---
 
-## Pull Request Metadata
+## ✅ Pull Request Metadata
 
 | Property | Value |
 |---|---|
-| **PR Title** | Fix unresolved reference safeOpenUrl in HomeScreen.kt |
-| **Target Branch** | `fix/safeOpenUrl-unresolved-reference` |
-| **Web Repository** | [https://github.com/Dev-Entity/tp-app](https://github.com/Dev-Entity/tp-app) |
-| **Compare URL** | [https://github.com/Dev-Entity/tp-app/compare/fix/safeOpenUrl-unresolved-reference](https://github.com/Dev-Entity/tp-app/compare/fix/safeOpenUrl-unresolved-reference) |
+| **PR Title** | `fix: Add missing rememberCoroutineScope to HomeScreen` |
+| **PR Description** | See [PR Description](#summary) below |
+| **Compare URL** | [https://github.com/Dev-Entity/tp-app/compare/fix/home-screen-scope](https://github.com/Dev-Entity/tp-app/compare/fix/home-screen-scope) |
 
-### PR Description
+---
+
+## 📄 PR Description (Markdown)
 
 ```markdown
 ## Summary
 
-Fixed the **safeOpenUrl** unresolved reference errors in `HomeScreen.kt` that caused the `:app:compileDevDebugKotlin` build to fail.
+Added a missing `rememberCoroutineScope()` declaration in `HomeScreen.kt` to enable coroutine launch capabilities within the composable scope.
 
 ## Changes
 
-- **app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt**
-  - Added the missing import for `safeOpenUrl` utility function
-  - Resolved compilation errors at lines 277 and 306
-
-## Root Cause
-
-The function `safeOpenUrl` was called on lines 277 and 306 but was neither imported nor defined in the file scope, leading to two **Unresolved reference** errors during Kotlin compilation.
+- **File:** `app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt`
+- **Modification:** Added `val scope = rememberCoroutineScope()` after `snackbarHostState` declaration.
+- **Purpose:** Provides the required `CoroutineScope` for launching coroutines (e.g., showing snackbars, performing async operations) from user action callbacks like button clicks, without relying on `LaunchedEffect`.
 
 ## Build Verification
 
-- ✅ `:app:compileDevDebugKotlin` passes
-- ✅ All unit tests green
+| Check | Status |
+|---|---|
+| Compilation | ✅ SUCCESS |
+| Warnings | 0 (minor cosmetic warning unrelated to change) |
+| Errors | 0 |
 
-## Related Issue
+## Related
 
-Fixes the build failure reported in the Android Build Verification Report.
+- No breaking changes, no API modifications.
+- Single insertion, backward compatible.
 ```
 
 ---
 
-## Summary
+## 🔗 Git Compare Workflow
 
-- ✅ **Branch created:** `fix/safeOpenUrl-unresolved-reference`
-- ✅ **Commit hash:** `1bb9701`
-- ✅ **Working tree:** Clean
-- ✅ **PR prepared:** Ready for review at `output/submit_pr.sh`
+```
+git fetch origin
+git checkout staging
+git pull origin staging
+git checkout fix/home-screen-scope
+git log origin/staging..HEAD
+git diff origin/staging..HEAD --stat
+```
+
+**Diff Summary:** 1 file changed, 1 insertion(+) — `app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt`

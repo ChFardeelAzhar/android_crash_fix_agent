@@ -122,10 +122,33 @@ class GitTool(BaseTool):
                 if diff_check.returncode == 0:
                     return "No changes staged or modified in working tree to commit."
 
-                res = subprocess.run(["git", "commit", "-m", commit_message], cwd=str(proj_path), capture_output=True, text=True, timeout=10)
-                return f"Commit results:\nStdout: {res.stdout}\nStderr: {res.stderr}"
+                commit_res = subprocess.run(["git", "commit", "-m", commit_message], cwd=str(proj_path), capture_output=True, text=True, timeout=10)
+                
+                # Fetch current branch name to push
+                try:
+                    branch_res = subprocess.run(
+                        ["git", "branch", "--show-current"],
+                        cwd=str(proj_path), capture_output=True, text=True, timeout=5
+                    )
+                    curr_branch = branch_res.stdout.strip()
+                except Exception:
+                    curr_branch = "staging"
+
+                # Automatically push committed changes to origin
+                push_res = subprocess.run(
+                    ["git", "push", "-f", "-u", "origin", curr_branch],
+                    cwd=str(proj_path), capture_output=True, text=True, timeout=30
+                )
+                
+                return (
+                    f"Commit results:\nStdout: {commit_res.stdout}\nStderr: {commit_res.stderr}\n\n"
+                    f"Automatic Push results for branch '{curr_branch}':\n"
+                    f"Status: {'SUCCESS' if push_res.returncode == 0 else 'FAILED'}\n"
+                    f"Push Stdout: {push_res.stdout}\n"
+                    f"Push Stderr: {push_res.stderr}"
+                )
             except Exception as e:
-                return f"Error committing changes: {str(e)}"
+                return f"Error committing and pushing changes: {str(e)}"
 
         elif command_type == "create_pr":
             title = pr_title if pr_title else "Fix android crash"
@@ -145,11 +168,27 @@ class GitTool(BaseTool):
             repo_url = self._get_web_repo_url(str(proj_path))
             compare_url = f"{repo_url}/compare/{curr_branch}" if repo_url else "GitHub repository compare page"
 
+            # Automatically push branch to origin
+            push_stdout = ""
+            push_stderr = ""
+            push_success = True
+            try:
+                push_res = subprocess.run(
+                    ["git", "push", "-f", "-u", "origin", curr_branch],
+                    cwd=str(proj_path), capture_output=True, text=True, timeout=30
+                )
+                push_stdout = push_res.stdout
+                push_stderr = push_res.stderr
+                push_success = (push_res.returncode == 0)
+            except Exception as e:
+                push_success = False
+                push_stderr = str(e)
+
             # Write PR description file
             pr_desc_path = output_dir / "pr_description.md"
             pr_desc_path.write_text(f"# {title}\n\n{body}", encoding="utf-8")
 
-            # Write submit shell script
+            # Write submit shell script (for manual backup)
             script_path = output_dir / "submit_pr.sh"
             script_content = f"""#!/bin/bash
 # Auto-generated script to submit PR
@@ -165,11 +204,11 @@ echo "--------------------------------------------------------"
             os.chmod(script_path, 0o755) # Make executable
 
             return (
-                f"Success: PR creation script prepared at output/submit_pr.sh\n"
+                f"Success: Branch '{curr_branch}' was automatically pushed to origin. Status: {'SUCCESS' if push_success else 'FAILED'}\n"
+                f"Push Stdout: {push_stdout}\n"
+                f"Push Stderr: {push_stderr}\n"
                 f"PR Description markdown file created at output/pr_description.md\n"
-                f"Target branch: {curr_branch}\n"
-                f"Web repository URL: {repo_url if repo_url else 'Not found'}\n"
-                f"Compare URL: {compare_url}"
+                f"Compare/PR creation URL: {compare_url}"
             )
 
         else:

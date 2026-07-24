@@ -1,371 +1,269 @@
-# Crash Fix Plan: ActivityNotFoundException in HomeScreen
+# Crash Fix Plan: `ActivityNotFoundException` on HomeScreen Tap
 
 ## Root Cause
 
-The app crashes with `ActivityNotFoundException` when a user taps the "Update" button in either the `AppUpdateDialog` or the `AppUpdateBanner`. The root cause is that the code directly calls `context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))` without first checking whether any installed Activity can handle the intent. This is a fatal exception that terminates the app immediately.
+The crash occurs when a user taps an app update UI element (dialog or banner) on the `HomeScreen`. The app attempts to open a server-provided URL (`https://bra-tools.s3.eu-west-1.amazonaws.com/...`) via an implicit `ACTION_VIEW` intent without first checking if any activity on the device can handle it. When the device lacks a web browser (or the default browser is disabled/uninstalled), calling `context.startActivity()` throws `ActivityNotFoundException`, causing a fatal crash on the main thread.
 
-The crash occurs in two locations in `HomeScreen.kt`:
-- **Line 271**: Inside the `AppUpdateDialog`'s `onUpdate` lambda
-- **Line 300**: Inside the `AppUpdateBanner`'s `onUpdateClick` lambda (based on the codebase investigation showing two identical unsafe sites)
+**Two identical unsafe code paths exist:**
+1. `HomeScreen.kt:271` - Inside `AppUpdateDialog`'s `onUpdate` lambda
+2. `HomeScreen.kt:300` - Inside `AppUpdateBanner`'s `onUpdateClick` lambda
 
-The `storeUrl` value from the backend points to an Amazon S3-hosted APK (`https://bra-tools.s3.eu-west-1.amazonaws.com/...`). On devices without a browser (common in enterprise/kiosk deployments), the intent resolution fails catastrophically.
+Both execute:
+```kotlin
+val url = state.appUpdate?.storeUrl ?: return@...
+context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+```
+
+**Key facts:**
+- URL is provided by the server via `DeviceManager`, not hardcoded
+- No `PackageManager.resolveActivity()` or `try-catch` exists anywhere in the codebase
+- Both UI paths (dialog for mandatory updates, banner for recommended updates) are affected
 
 ## Proposed Fix
 
-Apply a safe intent resolution check before both `startActivity` calls. The fix will:
-1. Create a helper function to safely launch intents with fallback handling
-2. Use `PackageManager.resolveActivity()` to verify an Activity can handle the intent
-3. If no handler exists, show a Snackbar to inform the user and optionally copy the URL to clipboard
-4. Keep the change minimal — only modify `HomeScreen.kt`
+### Strategy: Safe Intent Launch with Fallback
+
+The minimal fix adds a `resolveActivity()` check before launching the intent. If no activity can handle the URL, a user-friendly error is shown via a Snackbar instead of crashing the app.
+
+**Changes required:**
+1. **Add a `resolveActivity()` check** before both `startActivity()` calls
+2. **Add `SnackbarHostState` and coroutine scope** to show fallback message
+3. **Keep the same architecture** - no structural changes to MVVM or Compose patterns
 
 ## Files To Modify
 
 Only one file needs modification:
 
-**`app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt`**
+### 1. `app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt`
 
-### Changes Summary:
-1. Add imports for `SnackbarHostState`, `ClipboardManager`, `ClipData`, and `Context`
-2. Add a private helper function `safeOpenUrl` in the HomeScreen composable scope
-3. Replace the two unsafe `startActivity` calls with the safe helper
-
-### Exact Code Changes
-
-#### Change 1: Add Required Imports
-
-**Before:**
+**Add required imports:**
 ```kotlin
-package com.ananinja.tms.ui.home
-
-import android.content.Intent
-import android.net.Uri
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import android.content.pm.PackageManager
+import androidx.compose.material.SnackbarHostState
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
-import com.ananinja.tms.ui.components.AppUpdateBanner
-import com.ananinja.tms.ui.components.AppUpdateDialog
-import com.ananinja.tms.ui.components.LoadingProgressIndicator
-import com.ananinja.tms.ui.components.TopBarWithTitle
-```
-
-**After:**
-```kotlin
-package com.ananinja.tms.ui.home
-
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
-import com.ananinja.tms.ui.components.AppUpdateBanner
-import com.ananinja.tms.ui.components.AppUpdateDialog
-import com.ananinja.tms.ui.components.LoadingProgressIndicator
-import com.ananinja.tms.ui.components.TopBarWithTitle
-```
-
-#### Change 2: Replace `startActivity` at Lines 270-271 (AppUpdateDialog onUpdate)
-
-**Before:**
-```kotlin
-        sentAppUpdateDialogState?.let { event ->
-            AppUpdateDialog(
-                onDismiss = { viewModel.onDialogDismissed() },
-                onUpdate = {
-                    val url = state.appUpdate?.storeUrl ?: return@AppUpdateDialog
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                },
-                ...
-            )
-        }
-```
-
-**After:**
-```kotlin
-        sentAppUpdateDialogState?.let { event ->
-            AppUpdateDialog(
-                onDismiss = { viewModel.onDialogDismissed() },
-                onUpdate = {
-                    val url = state.appUpdate?.storeUrl ?: return@AppUpdateDialog
-                    safeOpenUrl(context, url, snackbarHostState)
-                },
-                ...
-            )
-        }
-```
-
-#### Change 3: Replace `startActivity` at Lines 299-300 (AppUpdateBanner onUpdateClick)
-
-**Before:**
-```kotlin
-                    AppUpdateBanner(
-                        updateInfo = requireNotNull(state.appUpdate),
-                        onUpdateClick = {
-                            val url = state.appUpdate?.storeUrl ?: return@AppUpdateBanner
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                        },
-                        onDismiss = { viewModel.onAppUpdateBannerDismissed() },
-                    )
-```
-
-**After:**
-```kotlin
-                    AppUpdateBanner(
-                        updateInfo = requireNotNull(state.appUpdate),
-                        onUpdateClick = {
-                            val url = state.appUpdate?.storeUrl ?: return@AppUpdateBanner
-                            safeOpenUrl(context, url, snackbarHostState)
-                        },
-                        onDismiss = { viewModel.onAppUpdateBannerDismissed() },
-                    )
-```
-
-#### Change 4: Update `snackbarHostState` Declaration (if not already present)
-
-**If `snackbarHostState` is not already declared:**
-Add this before the `Scaffold` call:
-```kotlin
-val snackbarHostState = remember { SnackbarHostState() }
-```
-
-**If `snackbarHostState` is already declared** (common in HomeScreen): Ensure it is passed to the scaffold and accessible in the lambda scopes.
-
-#### Change 5: Add Helper Function and Update Scaffold
-
-**Before (find the `Scaffold` call and its content area):**
-```kotlin
-@Composable
-fun HomeScreen(
-    ...
-) {
-    val context = LocalContext.current
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
-    
-    Scaffold(
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        ...
-    ) { paddingValues ->
-        // Main content
-    }
-}
-```
-
-**After (add private helper function inside the composable, and update the snackbar host):**
-```kotlin
-@Composable
-fun HomeScreen(
-    ...
-) {
-    val context = LocalContext.current
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
-    
-    Scaffold(
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        ...
-    ) { paddingValues ->
-        // Main content
-    }
-}
-
-private fun safeOpenUrl(context: Context, url: String, snackbarHostState: SnackbarHostState) {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-    if (intent.resolveActivity(context.packageManager) != null) {
-        context.startActivity(intent)
-    } else {
-        // Fallback: copy URL to clipboard and show snackbar
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = ClipData.newPlainText("Update URL", url)
-        clipboard.setPrimaryClip(clip)
-        
-        // Show snackbar with a coroutine scope
-        kotlinx.coroutines.MainScope().launch {
-            snackbarHostState.showSnackbar(
-                message = "No browser found. Update URL copied to clipboard.",
-                duration = SnackbarDuration.Long
-            )
-        }
-    }
-}
-```
-
-**IMPORTANT**: Add the required import for CoroutineScope at the top of the file:
-```kotlin
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 ```
 
-### Complete Modified Section (Lines 260-305, showing both fix sites)
+**Add `SnackbarHostState` to the Composable state:**
 
-Here is the complete Section showing the relevant area after modifications (providing context for clear parsing):
-
-```kotlin
-        sentAppUpdateDialogState?.let { event ->
-            AppUpdateDialog(
-                onDismiss = { viewModel.onDialogDismissed() },
-                onUpdate = {
-                    val url = state.appUpdate?.storeUrl ?: return@AppUpdateDialog
-                    safeOpenUrl(context, url, snackbarHostState)
-                },
-                updateInfo = requireNotNull(state.appUpdate),
-                packageName = context.packageName,
-            )
-        }
-
-        // Handle app update banner
-        sentAppUpdateBannerState?.let { event ->
-            if (state.appUpdate != null) {
-                // ... existing code around the banner ...
-                    AppUpdateBanner(
-                        updateInfo = requireNotNull(state.appUpdate),
-                        onUpdateClick = {
-                            val url = state.appUpdate?.storeUrl ?: return@AppUpdateBanner
-                            safeOpenUrl(context, url, snackbarHostState)
-                        },
-                        onDismiss = { viewModel.onAppUpdateBannerDismissed() },
-                    )
-                // ... existing code after the banner ...
-            }
-        }
-```
-
-### Complete Helper Function (to be added after the HomeScreen composable but before any other top-level functions)
-
-```kotlin
-/**
- * Safely opens a URL in an external browser. If no browser is available,
- * copies the URL to the clipboard and shows a snackbar notification.
- *
- * @param context The Android context for starting activities
- * @param url The URL to open
- * @param snackbarHostState The snackbar host state for showing notifications
- */
-private fun safeOpenUrl(context: Context, url: String, snackbarHostState: SnackbarHostState) {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-    if (intent.resolveActivity(context.packageManager) != null) {
-        context.startActivity(intent)
-    } else {
-        // Copy URL to clipboard as fallback
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = ClipData.newPlainText("Update URL", url)
-        clipboard.setPrimaryClip(clip)
-        
-        // Show snackbar notification using a coroutine
-        CoroutineScope(Dispatchers.Main).launch {
-            snackbarHostState.showSnackbar(
-                message = "No browser available. Update URL copied to clipboard.",
-                duration = SnackbarDuration.Long
-            )
-        }
-    }
-}
-```
-
-**Additional Imports Needed for the Helper Function:**
-```kotlin
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-```
-
-## Validation Steps
-
-### 1. Unit Testing
-- **Test `safeOpenUrl` function isolation** (after extracting to utility class if desired)
-- **Test with valid URL**: Verify `startActivity` is called when `resolveActivity` returns non-null
-- **Test with no browser**: Verify snackbar is shown and URL is copied to clipboard
-- **Test with null/short URL**: Verify no crash occurs with malformed URLs
-
-### 2. Manual Testing
-- **Normal Device with Browser**: Tap "Update" in dialog and banner → App should open browser with the S3 URL
-- **Device with Browser Disabled**: 
-  - Use Android Device Policy or test app to disable all browsers
-  - Tap "Update" → Should see snackbar "No browser available. Update URL copied to clipboard."
-  - Verify URL is in clipboard
-- **Kiosk/Enterprise Mode**: Run in managed configuration → Should not crash
-- **No Browser Installed**: 
-  - Use emulator without browser (remove Chrome via ADB)
-  - Tap "Update" → Should show snackbar fallback
-
-### 3. Integration Testing
-- **Verify SnackbarHostState is properly connected**: Ensure the snackbar actually displays
-- **Verify ViewModel state flow**: Ensure the `state.appUpdate?.storeUrl` is not consumed incorrectly
-- **Verify backward compatibility**: Test on Android API 24+ (minSdk likely)
-
-### 4. Regression Testing
-- **Verify existing MapUtil.kt functionality**: Ensure no regression in the existing `resolveActivity` usage
-- **Verify ProfileTab.kt `startActivity`**: Ensure that unrelated `startActivity` in ProfileTab (line 544) is not affected
-- **Full smoke test**: Navigate through HomeScreen, dialogs, banners, and ensure no new issues
-
-### 5. Crashlytics Monitoring
-- **Deploy fix and monitor**: Track issue `9b26cd77e392a55e6224dcfd78f509f7` for 1-2 weeks
-- **Verify crash rate drops to zero**: The `ActivityNotFoundException` should no longer occur
-- **Monitor new `snackbar` related crashes**: Ensure the coroutine scope doesn't leak or cause lifecycle issues
-
-### 6. Edge Cases
-- **Empty URL string**: Test if `storeUrl` returns `""` empty string (should still attempt to open, but `resolveActivity` will fail gracefully)
-- **Non-HTTP URL**: Test with `market://` or custom scheme (should check for appropriate handlers)
-- **Rapid multiple taps**: Test tapping "Update" rapidly → Only first tap should start activity (subsequent taps may fail `resolveActivity` but should not crash)
-- **Configuration changes**: Rotate screen while snackbar is showing → Snackbar should survive (state is `remember`d)
-
-### 7. Code Review Checklist
-- [ ] Both `startActivity` calls replaced with `safeOpenUrl`
-- [ ] `snackbarHostState` is properly `remember`ed and accessible
-- [ ] `ClipboardManager` import and usage correct
-- [ ] `CoroutineScope` not leaking (scope not tied to composable lifecycle could cause issues; consider using `rememberCoroutineScope()` instead of `MainScope()`)
-
-### 8. Optimization Consideration (Secondary Improvement)
-
-For a more robust solution, consider using `rememberCoroutineScope()` instead of `MainScope()` in the helper function to be lifecycle-aware:
-
-**Alternative Helper (preferred for production):**
+**Before:**
 ```kotlin
 @Composable
-private fun rememberSafeOpenUrl(): (String) -> Unit {
+fun HomeScreen(
+    viewModel: HomeViewModel = hiltViewModel(),
+    onNotificationClick: (Int) -> Unit = {},
+    onReservationSelected: (Int) -> Unit = {},
+    onMakeReservationSelected: () -> Unit = {},
+    onDataEntryClick: () -> Unit = {},
+    nestedScrollInteropSource: NestedScrollInteropSource? = null,
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val snackbarHostState = LocalSnackbarHostState.current
+    val snackbarHostState = remember { SnackbarHostState() }
+```
+
+**After:**
+```kotlin
+@Composable
+fun HomeScreen(
+    viewModel: HomeViewModel = hiltViewModel(),
+    onNotificationClick: (Int) -> Unit = {},
+    onReservationSelected: (Int) -> Unit = {},
+    onMakeReservationSelected: () -> Unit = {},
+    onDataEntryClick: () -> Unit = {},
+    nestedScrollInteropSource: NestedScrollInteropSource? = null,
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    
-    return { url ->
+```
+
+**Modify the `AppUpdateDialog` lambda (around line 267-273):**
+
+**Before:**
+```kotlin
+AppUpdateDialog(
+    releaseNotes = state.appUpdate?.releaseNotes,
+    onUpdate = {
+        val url = state.appUpdate?.storeUrl ?: return@AppUpdateDialog
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }
+)
+```
+
+**After:**
+```kotlin
+AppUpdateDialog(
+    releaseNotes = state.appUpdate?.releaseNotes,
+    onUpdate = {
+        val url = state.appUpdate?.storeUrl ?: return@AppUpdateDialog
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
         if (intent.resolveActivity(context.packageManager) != null) {
             context.startActivity(intent)
         } else {
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip = ClipData.newPlainText("Update URL", url)
-            clipboard.setPrimaryClip(clip)
-            
             scope.launch {
-                snackbarHostState.showSnackbar(
-                    message = "No browser available. Update URL copied to clipboard.",
-                    duration = SnackbarDuration.Long
-                )
+                snackbarHostState.showSnackbar("No browser available to open the update link")
             }
+        }
+    }
+)
+```
+
+**Modify the `AppUpdateBanner` lambda (around line 298-300):**
+
+**Before:**
+```kotlin
+onUpdateClick = {
+    val url = state.appUpdate?.storeUrl ?: return@AppUpdateBanner
+    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+}
+```
+
+**After:**
+```kotlin
+onUpdateClick = {
+    val url = state.appUpdate?.storeUrl ?: return@AppUpdateBanner
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    if (intent.resolveActivity(context.packageManager) != null) {
+        context.startActivity(intent)
+    } else {
+        scope.launch {
+            snackbarHostState.showSnackbar("No browser available to open the update link")
         }
     }
 }
 ```
 
-This alternative uses Compose lifecycle-aware coroutine scopes and local composition locals, but adds more complexity. The proposed minimal fix with `MainScope()` is acceptable for crash prevention, but the `rememberCoroutineScope()` approach is recommended for a production-grade solution in a subsequent iteration.
+### Complete Before/After Sections
+
+**Before (lines 267-273):**
+```kotlin
+        AppUpdateDialog(
+            releaseNotes = state.appUpdate?.releaseNotes,
+            onUpdate = {
+                val url = state.appUpdate?.storeUrl ?: return@AppUpdateDialog
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            }
+        )
+```
+
+**After (lines 267-275):**
+```kotlin
+        AppUpdateDialog(
+            releaseNotes = state.appUpdate?.releaseNotes,
+            onUpdate = {
+                val url = state.appUpdate?.storeUrl ?: return@AppUpdateDialog
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                if (intent.resolveActivity(context.packageManager) != null) {
+                    context.startActivity(intent)
+                } else {
+                    scope.launch {
+                        snackbarHostState.showSnackbar("No browser available to open the update link")
+                    }
+                }
+            }
+        )
+```
+
+**Before (lines 296-300):**
+```kotlin
+                onUpdateClick = {
+                    val url = state.appUpdate?.storeUrl ?: return@AppUpdateBanner
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                }
+```
+
+**After (lines 298-305):**
+```kotlin
+                onUpdateClick = {
+                    val url = state.appUpdate?.storeUrl ?: return@AppUpdateBanner
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    if (intent.resolveActivity(context.packageManager) != null) {
+                        context.startActivity(intent)
+                    } else {
+                        scope.launch {
+                            snackbarHostState.showSnackbar("No browser available to open the update link")
+                        }
+                    }
+                }
+```
+
+### Add Snackbar to the Scaffold (if not already present)
+
+Check if `SnackbarHost` is already used in the `Scaffold`. If not, add it:
+
+**Before (if no SnackbarHost):**
+```kotlin
+Scaffold(
+    snackbarHost = { SnackbarHost(snackbarHostState) },
+    // ... rest of existing parameters
+)
+```
+
+**After:**
+Ensure `snackbarHostState` is passed to `SnackbarHost` inside the existing `Scaffold` or add it if missing. Look for `Scaffold` definition in `HomeScreen.kt` and add:
+```kotlin
+snackbarHost = { SnackbarHost(snackbarHostState) },
+```
+
+## Validation Steps
+
+### Automated Testing
+1. **Unit Test for ViewModel**: Verify that when `storeUrl` is null, no intent is launched (already handled by Elvis operator - no change needed)
+2. **Unit Test for Intent Resolution**: Mock `PackageManager` to return null from `resolveActivity()` and verify no crash occurs
+3. **Compose UI Test**: 
+   - Tap "Update" button with a mock that returns no handler
+   - Verify Snackbar message appears
+   - Verify no `ActivityNotFoundException` is thrown
+
+### Manual Testing
+1. **Device with browser**: Tap update button → URL should open in browser as before (no regression)
+2. **Device without browser**: 
+   - Use emulator with Chrome removed/disabled
+   - Tap update button → Snackbar should show error message
+   - App should not crash
+3. **Device with null url**: Verify nothing happens (Elvis operator prevents execution)
+4. **Edge cases**:
+   - Malformed URL (empty string, invalid URI) - should still show Snackbar
+   - Rapid taps on the button - should not cause multiple snackbars (though SnackbarHost handles this gracefully)
+   - Screen rotation during Snackbar display - should not crash
+
+### Code Review Checklist
+- [ ] Imports added correctly (`PackageManager`, `SnackbarHostState`, `launch`)
+- [ ] `scope` variable declared and initialized
+- [ ] Both `AppUpdateDialog` and `AppUpdateBanner` paths updated
+- [ ] `SnackbarHost` added to `Scaffold` (if not already present)
+- [ ] No changes to `HomeViewModel`, `DeviceManager`, or data layer
+- [ ] No breaking changes to existing behavior (browser-available devices work as before)
+- [ ] Custom Tabs not required for this fix (would be a larger refactor)
+- [ ] Error message is user-friendly and not technical
+
+### Expected Behavior Matrix
+
+| Scenario | Behavior |
+|----------|----------|
+| URL valid + browser available | Opens URL in browser (unchanged) |
+| URL valid + no browser | Shows "No browser available" Snackbar |
+| URL is null | Nothing happens (Elvis returns) |
+| URL malformed | `Uri.parse()` may throw - but this is existing behavior; URL comes from server |
+
+### Regression Risks
+- **None identified**: The fix only adds a safety check before `startActivity()`. For devices with browsers, behavior is identical. For devices without browsers, the silent no-op becomes a user-visible Snackbar message instead of a crash.
+- **Performance**: Single `PackageManager` call per button tap - negligible overhead.
+
+### Deployment Notes
+- This fix should be included in version `1.0.23` (next release)
+- Consider also adding `try-catch(ActivityNotFoundException)` as a belt-and-suspenders safety measure if `PackageManager` behavior is inconsistent across OEMs:
+  ```kotlin
+  try {
+      if (intent.resolveActivity(context.packageManager) != null) {
+          context.startActivity(intent)
+      } else {
+          scope.launch { snackbarHostState.showSnackbar(...) }
+      }
+  } catch (e: ActivityNotFoundException) {
+      scope.launch { snackbarHostState.showSnackbar(...) }
+  }
+  ```
+  (Not included in minimal fix to avoid over-engineering, but easy to add if needed.)

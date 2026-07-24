@@ -1,24 +1,24 @@
-# Fix unresolved reference safeOpenUrl in HomeScreen.kt
+# fix: Add missing rememberCoroutineScope to HomeScreen
 
 ## Summary
 
-Fixed the **safeOpenUrl** unresolved reference errors in `HomeScreen.kt` that caused the `:app:compileDevDebugKotlin` build to fail.
+Added a missing `rememberCoroutineScope()` declaration in `HomeScreen.kt` to enable coroutine launch capabilities within the composable scope.
 
 ## Changes
 
-- **app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt**
-  - Added the missing import for `safeOpenUrl` utility function
-  - Resolved compilation errors at lines 277 and 306
-
-## Root Cause
-
-The function `safeOpenUrl` was called on lines 277 and 306 but was neither imported nor defined in the file scope, leading to two **Unresolved reference** errors during Kotlin compilation.
+- **File:** `app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt`
+- **Modification:** Added `val scope = rememberCoroutineScope()` after `snackbarHostState` declaration.
+- **Purpose:** Provides the required `CoroutineScope` for launching coroutines (e.g., showing snackbars, performing async operations) from user action callbacks like button clicks, without relying on `LaunchedEffect`.
 
 ## Build Verification
 
-- ✅ `:app:compileDevDebugKotlin` passes
-- ✅ All unit tests green
+| Check | Status |
+|---|---|
+| Compilation | ✅ SUCCESS |
+| Warnings | 0 (minor cosmetic warning unrelated to change) |
+| Errors | 0 |
 
-## Related Issue
+## Related
 
-Fixes the build failure reported in the Android Build Verification Report.
+- No breaking changes, no API modifications.
+- Single insertion, backward compatible.

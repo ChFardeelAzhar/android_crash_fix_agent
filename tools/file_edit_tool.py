@@ -119,19 +119,12 @@ class FileEditTool(BaseTool):
 
             formatted_replacement = "\n".join(formatted_repl_lines)
 
-            # Create backup file
-            backup_file = target_file.with_suffix(target_file.suffix + ".bak")
-            shutil.copy2(target_file, backup_file)
-
             # Apply replacement and write back
             new_content = content_norm[:start] + formatted_replacement + content_norm[end:]
             with open(target_file, "w", encoding="utf-8") as f:
                 f.write(new_content)
 
-            return (
-                f"Success: File '{relative_file_path}' has been successfully modified.\n"
-                f"A backup of the original file was saved to '{backup_file.name}'."
-            )
+            return f"Success: File '{relative_file_path}' has been successfully modified in place."
 
         except Exception as e:
             return f"Error modifying file '{relative_file_path}': {str(e)}"
