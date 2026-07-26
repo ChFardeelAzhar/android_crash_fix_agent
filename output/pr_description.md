@@ -1,26 +1,42 @@
-# fix: Prevent ActivityNotFoundException crash in HomeScreen.kt by wrapping startActivity in try-catch
+# Add manual toss winner selection feature
 
-## Description
+## Summary
 
-This PR fixes an `ActivityNotFoundException` crash in `HomeScreen.kt` that occurs when the user taps on an S3 HTTPS link and no browser activity is available to handle the `Intent.ACTION_VIEW` intent.
+Implements a manual toss winner selection feature on the Toss screen, allowing users to directly choose which team won the toss without performing the virtual coin toss animation. Both methods coexist — users can use either the existing coin toss or the new manual buttons.
 
-## Changes Made
+## Changes
 
-- **File:** `app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt`
-- Wrapped the `startActivity(intent)` call in a `try-catch (ActivityNotFoundException e)` block
-- Added a `Toast` fallback message informing the user that no browser is available
-- 9 insertions, 1 deletion
+### `TossViewModel.kt`
+- Added `TossSource` enum (`COIN`, `MANUAL`) for optional source tracking
+- Added `isAnimating`, `tossWinner`, and `tossSource` state flows
+- Exposed `onManualTossWinnerSelected(teamName: String)` — records the manual toss winner, clears any active toss animation state, and updates the selected winner
+- Exposed `onCoinTossComplete(winner: String)` and `setAnimating(animating: Boolean)` for clean animation state tracking
+
+### `TossScreen.kt`
+- Collected `isAnimating` and `tossWinner` using `collectAsStateWithLifecycle()`
+- Added two dynamic `OutlinedButton`s (e.g., "Team A Wins Toss" / "Team B Wins Toss") below the coin flip UI
+- Manual buttons are **disabled** while a coin toss animation is running to prevent state conflicts
+- Manual selection reuses the exact same downstream logic (batting/bowling bottom sheet → `saveTossResult` → navigation)
+
+### `TossViewModelTest.kt`
+- Added unit tests for the `onManualTossWinnerSelected` path:
+  - Manual selection sets the correct toss winner
+  - Manual selection clears animation state
+  - Downstream state is identical to coin-toss path
 
 ## Verification
 
 | Check | Status |
-|---|---|
-| Compilation | ✅ Passed (`:app:compileDevDebugKotlin` — UP-TO-DATE, zero errors) |
-| Unit Tests | ⚠️ No unit tests found for `devDebug` variant |
-| Build Exit Code | ✅ `0` (SUCCESS) |
+|-------|--------|
+| `:app:compileDebugKotlin` | ✅ PASSED |
+| `:app:compileDebugUnitTestKotlin` | ✅ PASSED |
+| `:app:testDebugUnitTest` | ✅ PASSED (all 32 tasks) |
 
-## Testing
+## Acceptance Criteria
 
-- Build compiles successfully with zero errors
-- The change is minimal and follows the existing MVVM Compose architecture
-- No regression expected as the intent creation logic remains unchanged
+- [x] User can manually declare which team won the toss without initiating a virtual coin toss
+- [x] Manual selection correctly reflects the toss winner and shows the batting/bowling decision prompt
+- [x] Both manual selection and coin toss remain functional
+- [x] Manual buttons are disabled during coin toss animation
+- [x] No data corruption or state inconsistencies
+- [x] All existing tests pass

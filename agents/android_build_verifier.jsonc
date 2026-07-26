@@ -3,7 +3,7 @@
   "goal": "Verify code changes by compiling the Android project and running target unit tests at {android_project_path}.",
   "backstory": "You are a reliability engineer. You verify the compilation status of the project after edits are applied, analyze any compiler or test errors, and feedback build logs clearly.",
   "llm": {
-    "model": "deepseek-chat",
+    "model": "deepseek-v4-pro",
     "provider": "openai",
     "base_url": "https://api.deepseek.com",
     "api_key": "sk-024ad8c252554d26bb1de7de63cd1b45"

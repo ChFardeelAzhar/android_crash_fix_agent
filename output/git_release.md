@@ -1,72 +1,79 @@
-# 📋 Git Release Report — `fix/activity-not-found-crash-homescreen`
+# Git Release Report
 
 ---
 
-## ✅ Branch Created
+## Branch Information
 
 | Property | Value |
-|---|---|
-| **Branch Name** | `fix/activity-not-found-crash-homescreen` |
-| **Base Branch** | `staging` |
-| **Upstream Tracking** | `origin/fix/activity-not-found-crash-homescreen` |
+|----------|-------|
+| **Branch Name** | `feat/manual-toss-winner` |
+| **Ticket Type** | Feature |
+| **Prefix Rule** | `feat/` |
+| **Naming Convention** | `feat/manual-toss-winner` (3 words, kebab-case, no ticket numbers) |
 
 ---
 
-## ✅ Commit Details
+## Commit Details
 
 | Property | Value |
-|---|---|
-| **Commit SHA** | `e69376c` |
-| **Commit Message** | `fix: Wrap startActivity in try-catch to prevent ActivityNotFoundException crash in HomeScreen.kt` |
-| **Files Changed** | `1` |
-| **Insertions** | `9` |
-| **Deletions** | `1` |
-
-### Modified File
-
-```
-app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt
-```
+|----------|-------|
+| **Commit Hash** | `4ef0dc1` |
+| **Commit Message** | `Add manual toss winner selection feature` |
+| **Message Length** | 6 words |
+| **Mood** | Imperative |
+| **Trailing Period** | None |
 
 ---
 
-## 📊 Git Status
+## Files Changed
 
-```
-On branch fix/activity-not-found-crash-homescreen
-Your branch is up to date with 'origin/fix/activity-not-found-crash-homescreen'.
-
-nothing to commit, working tree clean
-```
-
-- **Working tree:** ✅ Clean — all modifications committed
-- **No untracked files:** `.bak` backup files were **not** committed
+| File | Status |
+|------|--------|
+| `app/src/main/java/com/cricscore/app/ui/toss/TossScreen.kt` | Modified (+77 / −4) |
+| `app/src/main/java/com/cricscore/app/ui/toss/TossViewModel.kt` | Modified (+32) |
+| `app/src/test/java/com/cricscore/app/ui/toss/TossViewModelTest.kt` | Modified (+27) |
 
 ---
 
-## 🔗 Pull Request Metadata
+## Git Status
 
-| Property | Value |
-|---|---|
-| **PR Title** | `fix: Prevent ActivityNotFoundException crash in HomeScreen.kt by wrapping startActivity in try-catch` |
-| **PR Compare URL** | [https://github.com/Dev-Entity/tp-app/compare/fix/activity-not-found-crash-homescreen](https://github.com/Dev-Entity/tp-app/compare/fix/activity-not-found-crash-homescreen) |
-| **PR Description File** | `output/pr_description.md` |
-
-### PR Body Summary
-
-- **Fix:** Wrapped `startActivity(intent)` in `try-catch (ActivityNotFoundException e)` block
-- **Fallback:** Added `Toast` to inform user when no browser is available
-- **Compilation:** ✅ Passed — zero errors
-- **Build Exit Code:** `0` (SUCCESS)
+| Check | Status |
+|-------|--------|
+| **Branch Created** | ✅ `feat/manual-toss-winner` |
+| **Branch Checked Out** | ✅ |
+| **Changes Staged & Committed** | ✅ |
+| **Push to Remote** | ✅ (`origin/feat/manual-toss-winner`) |
+| **Working Tree Clean** | ✅ |
+| **PR Description** | ✅ Generated at `output/pr_description.md` |
 
 ---
 
-## 📝 Release Summary
+## Build & Test Verification
 
-The `ActivityNotFoundException` crash originally present in `HomeScreen.kt` (line 271) has been safely patched. The fix:
+| Task | Status |
+|------|--------|
+| `:app:compileDebugKotlin` | ✅ PASSED |
+| `:app:compileDebugUnitTestKotlin` | ✅ PASSED |
+| `:app:testDebugUnitTest` | ✅ PASSED (all 32 tasks) |
+| **New Failures** | None |
 
-1. ✅ Wraps the unprotected `startActivity(intent)` in a `try-catch` block
-2. ✅ Provides a user-facing `Toast` fallback when no browser activity can handle the S3 HTTPS link
-3. ✅ Compiles successfully with zero errors
-4. ✅ Is committed on the new branch `fix/activity-not-found-crash-homescreen` at commit `e69376c`
-5. ✅ Is pushed to origin and ready for PR review
+---
+
+## PR Reference
+
+- **Compare URL:** [https://github.com/ChFardeelAzhar/CricScore/compare/feat/manual-toss-winner](https://github.com/ChFardeelAzhar/CricScore/compare/feat/manual-toss-winner)
+- **PR Title:** `Add manual toss winner selection feature`
+
+---
+
+## Self-Check Validation
+
+| Rule | Requirement | Result |
+|------|-------------|--------|
+| **Branch Prefix** | `feat/` for Feature | ✅ `feat/` |
+| **Branch Name** | Max 3 words, kebab-case, no ticket numbers | ✅ `manual-toss-winner` |
+| **Commit Message** | Max 8 words, imperative mood, no trailing period | ✅ 6 words, imperative, no period |
+
+---
+
+*Release managed successfully. All naming conventions enforced, build verified, and PR metadata prepared.*

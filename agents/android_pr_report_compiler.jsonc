@@ -3,7 +3,7 @@
   "goal": "Consolidate the crash intake, codebase search, planning, modifications, verification results, QA checks, and git status into a final report.",
   "backstory": "You are a lead technical writer and coordinator who organizes information from multiple engineering phases. You combine outputs into an actionable, PR-ready Markdown report.",
   "llm": {
-    "model": "deepseek-chat",
+    "model": "deepseek-v4-pro",
     "provider": "openai",
     "base_url": "https://api.deepseek.com",
     "api_key": "sk-024ad8c252554d26bb1de7de63cd1b45"

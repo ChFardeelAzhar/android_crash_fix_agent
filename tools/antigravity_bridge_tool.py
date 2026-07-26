@@ -24,9 +24,12 @@ class AntigravityBridgeTool(BaseTool):
         if not project_dir.is_dir():
             return f"Error: android_project_path '{android_project_path}' is not a valid directory."
 
-        # Sandbox check (similar to git_tool.py)
-        if not (project_dir.is_relative_to("/Users/retailopakistan/Documents/tp-app") or project_dir.name == "tp-app"):
-            return "Security Error: Path resolves outside the authorized Android application directory."
+        # Sandbox check: Must be inside user's home directory and contain gradle wrapper
+        if not project_dir.is_relative_to("/Users/retailopakistan"):
+            return "Security Error: Path resolves outside the authorized user home directory."
+        
+        if not (project_dir / "gradlew").is_file() and not (project_dir / "gradlew.bat").is_file():
+            return "Security Error: Target path is not a valid Android project (missing Gradle wrapper 'gradlew')."
 
         # 1. Capture baseline git state
         baseline_head = ""

@@ -1,7 +1,8 @@
 {
   "name": "android_crash_fix_agent",
   "agents": [
-    "android_crash_analyst",
+    "android_ticket_fetcher",
+    "android_ticket_analyst",
     "android_prompt_engineer",
     "android_antigravity_operator",
     "android_build_verifier",
@@ -11,20 +12,31 @@
   ],
   "tasks": [
     {
-      "name": "crash_intake_task",
-      "description": "Analyze the raw Android crash context provided in {raw_crash_context}. Parse and extract the exception type, failing method or class, stack trace signals, likely affected Android layer, severity, reproduction clues, device or OS clues, app version clues, and missing information. Clearly separate confirmed facts from assumptions.",
-      "expected_output": "A structured markdown crash intake report with sections: Summary, Confirmed Facts, Assumptions, Exception Type, Stack Trace Signals, Likely Affected Layer, Severity, Reproduction Clues, Missing Information, and Next Investigation Steps.",
-      "agent": "android_crash_analyst",
+      "name": "ticket_intake_task",
+      "description": "Given the ticket source tracker type `{source_type}` and the source lookup payload `{source_value}`, call the ticket_fetch_tool exactly once to retrieve the raw ticket details or wrap the raw text. Return the raw output unmodified.",
+      "expected_output": "The raw fetched ticket, issue, PR, or crash details as markdown, plus a one-line note indicating the resolved source tracker type.",
+      "agent": "android_ticket_fetcher",
       "markdown": true,
-      "output_file": "output/crash_intake_report.md"
+      "output_file": "output/ticket_raw.md"
+    },
+    {
+      "name": "ticket_analysis_task",
+      "description": "Analyze the raw ticket content inside output/ticket_raw.md. Identify and explicitly state the classified Ticket Type. You MUST classify it strictly as one of: 'Fix' (for bugs/crashes), 'Feature' (for new features), or 'Chore' (for updates/maintenance). Additionally, summarize the ticket details and outline Confirmed Facts, Assumptions, Expected Output, Required Steps, Acceptance Criteria (if present), Severity (if it is a Fix/crash), and Missing Information.",
+      "expected_output": "A structured markdown ticket intake report containing sections: Ticket Type, Summary, Confirmed Facts, Assumptions, Expected Output, Required Steps, Acceptance Criteria, Severity, and Missing Information.",
+      "agent": "android_ticket_analyst",
+      "context": [
+        "ticket_intake_task"
+      ],
+      "markdown": true,
+      "output_file": "output/ticket_intake_report.md"
     },
     {
       "name": "prompt_engineering_task",
-      "description": "Using the crash intake report and Android project path {android_project_path}, write a comprehensive natural-language instruction brief for an autonomous coding agent to search the codebase, plan the fix, and apply edits. The brief must contain at minimum: 1. Objective: fix this specific crash safely and minimally. 2. Crash Summary: condensed from the intake report (exception type, failing method/class, stack trace, severity). 3. Investigation Instructions: instruction to explore the codebase (do not assume file paths) to locate the root cause. 4. Fix Constraints: minimal, lifecycle-safe, MVVM-consistent Compose/Kotlin changes only; do not add unrelated refactors; must not break existing tests. 5. Definition of Done: apply changes directly to the working tree, leave it ready for compilation. Crucially, the brief must include a fenced block clearly labeled 'FIX_INSTRUCTION' containing the exact single prompt string to be passed verbatim to 'agy -p'.",
+      "description": "Using output/ticket_intake_report.md and project path {android_project_path}, write a comprehensive natural-language instruction brief for an autonomous coding agent to implement the required changes (whether it is a Fix, Feature, or Chore). The brief must contain at minimum: 1. Objective: satisfy the ticket requirements safely and minimally. 2. Ticket Summary: condensed from the intake report. 3. Investigation Instructions: instruction to explore the codebase (do not assume file paths) to locate files to change. 4. Implementation Constraints: minimal, lifecycle-safe, MVVM-consistent Compose/Kotlin changes only; do not add unrelated refactors; must not break existing tests. 5. Definition of Done: apply changes directly to the working tree. Crucially, the brief must include a fenced block clearly labeled 'FIX_INSTRUCTION' containing the exact single prompt string to be passed verbatim to 'agy -p'.",
       "expected_output": "A markdown engineering brief containing the prompt engineering result and a fenced code block labeled FIX_INSTRUCTION with the verbatim prompt string inside.",
       "agent": "android_prompt_engineer",
       "context": [
-        "crash_intake_task"
+        "ticket_analysis_task"
       ],
       "markdown": true,
       "output_file": "output/antigravity_brief.md"
@@ -53,10 +65,11 @@
     },
     {
       "name": "device_verification_task",
-      "description": "Using the build verification details, perform runtime and device checks. You MUST call adb_tool to list connected devices, launch the application if needed, and take verification screenshots to confirm device status. CRITICAL CONSTRAINT: You must use the adb_tool to capture device logs or take screenshots, and detail the captured artifacts.",
-      "expected_output": "A markdown device verification log listing screenshots captured, connected devices, and logcat highlights.",
+      "description": "Perform runtime and device checks using adb_tool. Read the Antigravity execution log / fix instruction context to identify the specific files modified and the target screen (e.g. Toss Screen, Profile Screen). You MUST NOT simply capture the default app launcher/home screen unless the modifications reside there; launch the app and navigate to the target screen (utilizing launch_app, input_tap, input_text, or input_keyevent commands if needed) to verify the actual feature/fix in action. If it is a static layout/UI change, use 'screencap' to capture a verification screenshot. If it is an animation, transition, or gesture-driven change, call 'screen_record_start', exercise the interaction on the device, then call 'screen_record_stop_and_pull' to pull the video file. If ambiguous, capture a screenshot AND note that manual video review may be needed. Detail all captured artifacts and connected devices.",
+      "expected_output": "A markdown device verification log listing screenshots captured, video paths, connected devices, and logcat highlights.",
       "agent": "android_device_operator",
       "context": [
+        "antigravity_execution_task",
         "build_verification_task"
       ],
       "markdown": true,
@@ -64,10 +77,11 @@
     },
     {
       "name": "git_release_task",
-      "description": "Using the modified files and project path {android_project_path}, perform Git repository management. You MUST call git_tool to check the status, create a fresh git branch for the fix, commit only the modified source code files with a clear message (ensure you ignore and do not commit any .bak backup files), and prepare the Pull Request metadata. CRITICAL CONSTRAINT: You must verify that the modifications are successfully committed to a new git branch using the git_tool.",
-      "expected_output": "A markdown git release report showing the created branch name, commit hash, and status of git changes.",
+      "description": "Perform Git repository management using git_tool. You MUST read output/ticket_intake_report.md to identify the Ticket Type. Based on this Ticket Type, enforce naming rules: 1. Branch prefix: 'fix/' if Ticket Type is Fix, 'feat/' if Feature, 'chore/' if Chore. 2. Branch name: prefix + max 3 words, kebab-case (e.g. 'fix/profile-screen-backup'). No ticket numbers or long descriptions. 3. Commit message: max 8 words, imperative mood, with no trailing period (e.g. 'Fix null crash on profile screen backup'). Before calling git_tool to create the branch, you MUST self-check the proposed branch name and commit message against these rules, and shorten them if they violate them. Commit only the modified source code files and prepare the PR metadata.",
+      "expected_output": "A markdown git release report showing the created branch name, commit hash, commit message used, and status of git changes.",
       "agent": "android_git_release_manager",
       "context": [
+        "ticket_analysis_task",
         "antigravity_execution_task",
         "build_verification_task"
       ],
@@ -76,11 +90,12 @@
     },
     {
       "name": "final_report_task",
-      "description": "Consolidate the crash intake, prompt engineering details, antigravity execution results, modification logs, build verification, device verification, and git release branch details into a final PR-ready engineering report for the project at {android_project_path}.",
-      "expected_output": "A final markdown PR report with sections: Title, Executive Summary, Crash Details, Root Cause Hypothesis, Modifications Made, Git Branch & Commit Status, Test Plan & Verification Results (showing build/test status), Manual QA Checklist, Risk Level, and Reviewer Checklist.",
+      "description": "Consolidate the ticket intake details, ticket analysis, prompt engineering brief, antigravity execution results, build verification logs, device verification, and git release branch details into a final PR-ready engineering report for the project at {android_project_path}.",
+      "expected_output": "A final markdown PR report with sections: Title, Executive Summary, Ticket Source (GitHub/Jira/Raw), Ticket Type (Fix/Feature/Chore), Branch Name, Modifications Made, Git Branch & Commit Status, Test Plan & Verification Results (showing build/test status), Manual QA Checklist, Risk Level, and Reviewer Checklist.",
       "agent": "android_pr_report_compiler",
       "context": [
-        "crash_intake_task",
+        "ticket_intake_task",
+        "ticket_analysis_task",
         "prompt_engineering_task",
         "antigravity_execution_task",
         "build_verification_task",
@@ -95,7 +110,8 @@
   "verbose": true,
   "memory": false,
   "inputs": {
-    "raw_crash_context": "",
+    "source_type": "raw_text",
+    "source_value": "",
     "android_project_path": "/Users/retailopakistan/Documents/tp-app"
   }
 }

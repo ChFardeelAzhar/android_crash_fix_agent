@@ -79,9 +79,12 @@ class GitTool(BaseTool):
         if not proj_path.is_dir():
             return f"Error: Target path '{android_project_path}' is not a directory."
 
-        # Sandbox check
-        if not (proj_path.is_relative_to("/Users/retailopakistan/Documents/tp-app") or proj_path.name == "tp-app"):
-            return "Security Error: Path resolves outside the authorized Android application directory."
+        # Sandbox check: Must be inside user's home directory and contain gradle wrapper
+        if not proj_path.is_relative_to("/Users/retailopakistan"):
+            return "Security Error: Path resolves outside the authorized user home directory."
+        
+        if not (proj_path / "gradlew").is_file() and not (proj_path / "gradlew.bat").is_file():
+            return "Security Error: Target path is not a valid Android project (missing Gradle wrapper 'gradlew')."
 
         # Ensure output directory exists
         output_dir = Path("output").resolve()

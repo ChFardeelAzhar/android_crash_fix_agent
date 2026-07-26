@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 class ADBInput(BaseModel):
     command_type: str = Field(
         ...,
-        description="The ADB operation to execute. Allowed: 'list_devices', 'launch_app', 'screencap', 'screenrecord_start', 'screenrecord_stop', 'get_logcat'"
+        description="The ADB operation to execute. Allowed: 'list_devices', 'launch_app', 'screencap', 'screenrecord_start', 'screenrecord_stop', 'screen_record_start', 'screen_record_stop_and_pull', 'get_logcat', 'input_tap', 'input_text', 'input_keyevent'"
     )
     package_name: str = Field(
         default="com.ananinja.tms",
@@ -24,6 +24,22 @@ class ADBInput(BaseModel):
     filename: str = Field(
         default="",
         description="Target output filename inside output/ (e.g. 'screenshot.png' or 'reproduction.mp4')."
+    )
+    x: int = Field(
+        default=0,
+        description="X coordinate for input_tap."
+    )
+    y: int = Field(
+        default=0,
+        description="Y coordinate for input_tap."
+    )
+    text_content: str = Field(
+        default="",
+        description="Text content to type for input_text."
+    )
+    key_code: int = Field(
+        default=0,
+        description="Key code for input_keyevent (e.g., 4 for BACK)."
     )
 
 class ADBTool(BaseTool):
@@ -65,7 +81,7 @@ class ADBTool(BaseTool):
         except Exception:
             return False
 
-    def _run(self, command_type: str, package_name: str = "com.ananinja.tms", activity_name: str = "", filename: str = "") -> str:
+    def _run(self, command_type: str, package_name: str = "com.ananinja.tms", activity_name: str = "", filename: str = "", x: int = 0, y: int = 0, text_content: str = "", key_code: int = 0) -> str:
         adb_exec = self._get_adb_path()
 
         # Sanitize inputs
@@ -121,7 +137,7 @@ class ADBTool(BaseTool):
             except Exception as e:
                 return f"Error capturing screen: {str(e)}"
 
-        elif command_type == "screenrecord_start":
+        elif command_type in ("screenrecord_start", "screen_record_start"):
             try:
                 # Terminate any existing screenrecordings on the device first
                 subprocess.run([adb_exec, "shell", "pkill", "-2", "screenrecord"], timeout=10)
@@ -135,7 +151,7 @@ class ADBTool(BaseTool):
             except Exception as e:
                 return f"Error starting screen record: {str(e)}"
 
-        elif command_type == "screenrecord_stop":
+        elif command_type in ("screenrecord_stop", "screen_record_stop_and_pull"):
             fname = filename if filename else "reproduction.mp4"
             if not fname.endswith(".mp4"):
                 fname += ".mp4"
@@ -150,6 +166,8 @@ class ADBTool(BaseTool):
                 subprocess.run([adb_exec, "pull", "/sdcard/record.mp4", str(target_path)], check=True, timeout=20)
                 # Cleanup on device
                 subprocess.run([adb_exec, "shell", "rm", "/sdcard/record.mp4"], timeout=10)
+                if command_type == "screen_record_stop_and_pull":
+                    return str(target_path)
                 return f"Success: Screen recording saved to output/{fname}"
             except subprocess.CalledProcessError as e:
                 return f"Error stopping/pulling recording: {e.stderr}"
@@ -175,6 +193,31 @@ class ADBTool(BaseTool):
                 return "Logcat log output:\n" + "\n".join(filtered_lines)
             except Exception as e:
                 return f"Error reading logcat: {str(e)}"
+
+        elif command_type == "input_tap":
+            try:
+                cmd = [adb_exec, "shell", "input", "tap", str(x), str(y)]
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                return f"Success: Tapped on coordinates ({x}, {y}). Output: {res.stdout}"
+            except Exception as e:
+                return f"Error executing input_tap: {str(e)}"
+
+        elif command_type == "input_text":
+            try:
+                sanitized_text = text_content.replace(" ", "%s")
+                cmd = [adb_exec, "shell", "input", "text", sanitized_text]
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                return f"Success: Typed text. Output: {res.stdout}"
+            except Exception as e:
+                return f"Error executing input_text: {str(e)}"
+
+        elif command_type == "input_keyevent":
+            try:
+                cmd = [adb_exec, "shell", "input", "keyevent", str(key_code)]
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                return f"Success: Sent key event {key_code}. Output: {res.stdout}"
+            except Exception as e:
+                return f"Error executing key event: {str(e)}"
 
         else:
             return f"Error: Unknown command_type '{command_type}'."

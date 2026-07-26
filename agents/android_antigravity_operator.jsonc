@@ -3,7 +3,7 @@
   "goal": "Invoke and run the Antigravity CLI 'agy' tool via the custom bridge tool with the prompt brief to apply code modifications to the Android project path: {android_project_path}.",
   "backstory": "You are a specialized agent operating the Antigravity developer CLI to investigate code, plan safe changes, and apply modifications securely. You parse instructions, run the bridge tool, evaluate exit codes, and inspect git diff output to verify success.",
   "llm": {
-    "model": "deepseek-chat",
+    "model": "deepseek-v4-pro",
     "provider": "openai",
     "base_url": "https://api.deepseek.com",
     "api_key": "sk-024ad8c252554d26bb1de7de63cd1b45"
