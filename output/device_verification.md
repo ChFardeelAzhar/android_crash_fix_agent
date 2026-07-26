@@ -1,93 +1,83 @@
-# 📱 Device Verification Log
+# 🧪 Device Verification Log
 
----
+## 📱 Connected Devices
 
-## 1. Connected Devices Check
+| Timestamp | Status | Details |
+|---|---|---|
+| **Check 1** | ❌ **No devices found** | `adb devices` returned empty list |
+| **Check 2** | ❌ **No devices found** | `adb devices` returned empty list |
+| **Check 3** | ❌ **No devices found** | `adb devices` returned empty list |
 
-| Property | Value |
-|---|---|
-| **ADB Command** | `adb devices -l` |
-| **Result Timestamp** | 2025-04-15 |
-| **Status** | ❌ **No Devices or Emulators Connected** |
+**Command executed:** `adb devices`
 
+**Raw output:**
 ```
-Connected devices:
 List of devices attached
 
-(empty)
 ```
 
-> ⚠️ **No Android devices or emulators were detected on this system.** All subsequent runtime operations could not be performed.
+No physical Android devices were connected via USB, and no Android Virtual Devices (emulators) were running at the time of verification.
 
 ---
 
-## 2. Application Launch Attempt
+## 🚀 Application Launch Attempt
 
-| Property | Value |
-|---|---|
-| **Launch Command** | `adb shell am start -n com.ananinja.tms/.ui.MainActivity` |
-| **Status** | ❌ **Failed — No Device** |
-| **Error** | `Error: No connected Android devices or emulators found. Please start an emulator or connect a device before executing this command.` |
-
-> The APK has been built successfully (see Build Verification Report), but could not be deployed because no runtime environment is available.
-
----
-
-## 3. Logcat Capture Attempt
-
-| Property | Value |
-|---|---|
-| **Logcat Command** | `adb logcat -d -v threadtime` |
-| **Status** | ❌ **Failed — No Device** |
-| **Artifact** | `logcat_output.txt` — *not generated* |
-
-> ❌ **Logcat Highlights:** *No logcat data available — no device connected.*
-
----
-
-## 4. Screenshot Capture Attempt
-
-| Property | Value |
-|---|---|
-| **Screencap Command** | `adb exec-out screencap -p` |
-| **Status** | ❌ **Failed — No Device** |
-| **Artifact** | `verification_screenshot.png` — *not captured* |
-
-> ❌ **No Screenshots Captured:** *No device or emulator screen available to capture.*
-
----
-
-## 5. Summary of Verification Artifacts
-
-| Artifact | File | Status |
+| Attempt | Result | Details |
 |---|---|---|
-| Device List | `devices_list.txt` | ✅ Generated (empty — no devices) |
-| Launch Log | `launch_log.txt` | ✅ Generated (error returned) |
-| Logcat Dump | `logcat_output.txt` | ❌ Not generated |
-| Screenshot | `verification_screenshot.png` | ❌ Not captured |
+| **Launch app** | ❌ **Failed** | `adb shell am start -n com.ananinja.tms/.ui.MainActivity` |
+| **Error message** | `Error: No connected Android devices or emulators found. Please start an emulator or connect a device before executing this command.` |
+
+The application `com.ananinja.tms` could not be launched because no target device or emulator was available.
 
 ---
 
-## 6. Conclusion
+## 📋 Logcat Capture Attempt
 
-| Check | Status | Details |
+| Attempt | Result | Details |
 |---|---|---|
-| Build Compilation | ✅ **PASSED** | All Kotlin sources compiled successfully (Exit Code 0) |
-| Device Connectivity | ❌ **FAILED** | No emulators or physical devices detected via ADB |
-| App Launch | ❌ **NOT PERFORMED** | Requires a connected device |
-| Logcat Analysis | ❌ **NOT PERFORMED** | Requires a connected device |
-| Screenshot Verification | ❌ **NOT PERFORMED** | Requires a connected device |
+| **Logcat capture** | ❌ **Failed** | `adb logcat -d -v threadtime` |
+| **Error message** | `Error: No connected Android devices or emulators found. Please start an emulator or connect a device before executing this command.` |
 
-**Overall Runtime Verification Verdict:** ⛔ **INCOMPLETE** — The build artifacts are ready but could not be deployed or tested on a device. To complete runtime verification, please:
+No `logcat` logs could be retrieved due to the absence of connected devices.
 
-1. **Start an Android emulator** via Android Studio AVD Manager, or
-2. **Connect a physical device** with USB debugging enabled, then
-3. Re-run the following commands:
-   ```bash
-   adb install -r /path/to/DevDebug.apk
-   adb shell am start -n com.ananinja.tms/.ui.MainActivity
-   adb logcat -d -v threadtime | grep -E "(com.ananinja.tms|AndroidRuntime|FATAL)"
-   adb exec-out screencap -p > verification_screenshot.png
-   ```
+---
 
-> **Note:** The build itself is ✅ **SUCCESSFUL** (Exit Code 0) with zero errors and only one minor warning (redundant `else` branch). No functional issues are expected from the code changes in `HomeScreen.kt`.
+## 📸 Screenshot Capture Attempt
+
+| Attempt | Result | Details |
+|---|---|---|
+| **Screenshot** | ❌ **Skipped** | Screenshot capture requires an active device/emulator connection |
+| **Reason** | No device to capture from | |
+
+---
+
+## 📊 Summary of Verification Artifacts
+
+| Artifact | File | Captured? | Content |
+|---|---|---|---|
+| Device list | `devices.txt` | ✅ | Empty device list |
+| Device list (retry) | `devices_retry.txt` | ✅ | Empty device list |
+| Launch log | `launch_log.txt` | ✅ | Error: no device |
+| Device check (final) | `final_device_check.txt` | ✅ | Empty device list |
+| Logcat dump | `logcat_dump.txt` | ✅ | Error: no device |
+| Screenshots | N/A | ❌ | Not captured |
+
+---
+
+## 🔍 Logcat Highlights
+
+*No logcat output available* — No connected devices or emulators were detected during the verification session. Logcat capture could not proceed.
+
+---
+
+## ⚠️ Conclusion & Recommendations
+
+| Item | Status | Notes |
+|---|---|---|
+| **Build verification** | ✅ **PASSED** | Build completed with exit code `0`. Compilation successful. |
+| **Device connectivity** | ❌ **No devices** | No physical devices or emulators were connected. |
+| **App launch** | ⚠️ **Not tested** | Requires an active device or emulator. |
+| **Runtime checks** | ⚠️ **Not performed** | Cannot verify app behavior at runtime without a device. |
+| **Screenshots** | ⚠️ **Not captured** | Cannot capture UI state without a device. |
+
+**Recommendation:** Start an Android emulator (e.g., using Android Studio or `emulator -avd <avd_name>`) or connect a physical device via USB with USB debugging enabled, then re-run the verification to capture runtime diagnostics, app screen states, and logcat logs.

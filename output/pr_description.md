@@ -1,24 +1,26 @@
-# fix: Add missing rememberCoroutineScope to HomeScreen
+# fix: Prevent ActivityNotFoundException crash in HomeScreen.kt by wrapping startActivity in try-catch
 
-## Summary
+## Description
 
-Added a missing `rememberCoroutineScope()` declaration in `HomeScreen.kt` to enable coroutine launch capabilities within the composable scope.
+This PR fixes an `ActivityNotFoundException` crash in `HomeScreen.kt` that occurs when the user taps on an S3 HTTPS link and no browser activity is available to handle the `Intent.ACTION_VIEW` intent.
 
-## Changes
+## Changes Made
 
 - **File:** `app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt`
-- **Modification:** Added `val scope = rememberCoroutineScope()` after `snackbarHostState` declaration.
-- **Purpose:** Provides the required `CoroutineScope` for launching coroutines (e.g., showing snackbars, performing async operations) from user action callbacks like button clicks, without relying on `LaunchedEffect`.
+- Wrapped the `startActivity(intent)` call in a `try-catch (ActivityNotFoundException e)` block
+- Added a `Toast` fallback message informing the user that no browser is available
+- 9 insertions, 1 deletion
 
-## Build Verification
+## Verification
 
 | Check | Status |
 |---|---|
-| Compilation | ✅ SUCCESS |
-| Warnings | 0 (minor cosmetic warning unrelated to change) |
-| Errors | 0 |
+| Compilation | ✅ Passed (`:app:compileDevDebugKotlin` — UP-TO-DATE, zero errors) |
+| Unit Tests | ⚠️ No unit tests found for `devDebug` variant |
+| Build Exit Code | ✅ `0` (SUCCESS) |
 
-## Related
+## Testing
 
-- No breaking changes, no API modifications.
-- Single insertion, backward compatible.
+- Build compiles successfully with zero errors
+- The change is minimal and follows the existing MVVM Compose architecture
+- No regression expected as the intent creation logic remains unchanged

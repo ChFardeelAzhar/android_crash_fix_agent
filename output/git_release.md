@@ -1,4 +1,4 @@
-# 📋 Git Release Report
+# 📋 Git Release Report — `fix/activity-not-found-crash-homescreen`
 
 ---
 
@@ -6,9 +6,9 @@
 
 | Property | Value |
 |---|---|
-| **Branch Name** | `fix/home-screen-scope` |
+| **Branch Name** | `fix/activity-not-found-crash-homescreen` |
 | **Base Branch** | `staging` |
-| **Project Path** | `/Users/retailopakistan/Documents/tp-app` |
+| **Upstream Tracking** | `origin/fix/activity-not-found-crash-homescreen` |
 
 ---
 
@@ -16,11 +16,11 @@
 
 | Property | Value |
 |---|---|
-| **Commit Hash** | `285cfdc` |
-| **Commit Message** | `Add rememberCoroutineScope to HomeScreen for coroutine support` |
-| **Files Changed** | 1 |
-| **Insertions** | 1 |
-| **Deletions** | 0 |
+| **Commit SHA** | `e69376c` |
+| **Commit Message** | `fix: Wrap startActivity in try-catch to prevent ActivityNotFoundException crash in HomeScreen.kt` |
+| **Files Changed** | `1` |
+| **Insertions** | `9` |
+| **Deletions** | `1` |
 
 ### Modified File
 
@@ -28,71 +28,45 @@
 app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt
 ```
 
-**Change:** Added `val scope = rememberCoroutineScope()` just after `val snackbarHostState = remember { SnackbarHostState() }`.
-
 ---
 
-## ✅ Working Tree Status
+## 📊 Git Status
 
 ```
-On branch fix/home-screen-scope
-Your branch is up to date with 'origin/fix/home-screen-scope'.
+On branch fix/activity-not-found-crash-homescreen
+Your branch is up to date with 'origin/fix/activity-not-found-crash-homescreen'.
 
 nothing to commit, working tree clean
 ```
 
-> ✅ All modifications have been **committed** and **pushed** to remote. No `.bak` backup files were included.
+- **Working tree:** ✅ Clean — all modifications committed
+- **No untracked files:** `.bak` backup files were **not** committed
 
 ---
 
-## ✅ Pull Request Metadata
+## 🔗 Pull Request Metadata
 
 | Property | Value |
 |---|---|
-| **PR Title** | `fix: Add missing rememberCoroutineScope to HomeScreen` |
-| **PR Description** | See [PR Description](#summary) below |
-| **Compare URL** | [https://github.com/Dev-Entity/tp-app/compare/fix/home-screen-scope](https://github.com/Dev-Entity/tp-app/compare/fix/home-screen-scope) |
+| **PR Title** | `fix: Prevent ActivityNotFoundException crash in HomeScreen.kt by wrapping startActivity in try-catch` |
+| **PR Compare URL** | [https://github.com/Dev-Entity/tp-app/compare/fix/activity-not-found-crash-homescreen](https://github.com/Dev-Entity/tp-app/compare/fix/activity-not-found-crash-homescreen) |
+| **PR Description File** | `output/pr_description.md` |
+
+### PR Body Summary
+
+- **Fix:** Wrapped `startActivity(intent)` in `try-catch (ActivityNotFoundException e)` block
+- **Fallback:** Added `Toast` to inform user when no browser is available
+- **Compilation:** ✅ Passed — zero errors
+- **Build Exit Code:** `0` (SUCCESS)
 
 ---
 
-## 📄 PR Description (Markdown)
+## 📝 Release Summary
 
-```markdown
-## Summary
+The `ActivityNotFoundException` crash originally present in `HomeScreen.kt` (line 271) has been safely patched. The fix:
 
-Added a missing `rememberCoroutineScope()` declaration in `HomeScreen.kt` to enable coroutine launch capabilities within the composable scope.
-
-## Changes
-
-- **File:** `app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt`
-- **Modification:** Added `val scope = rememberCoroutineScope()` after `snackbarHostState` declaration.
-- **Purpose:** Provides the required `CoroutineScope` for launching coroutines (e.g., showing snackbars, performing async operations) from user action callbacks like button clicks, without relying on `LaunchedEffect`.
-
-## Build Verification
-
-| Check | Status |
-|---|---|
-| Compilation | ✅ SUCCESS |
-| Warnings | 0 (minor cosmetic warning unrelated to change) |
-| Errors | 0 |
-
-## Related
-
-- No breaking changes, no API modifications.
-- Single insertion, backward compatible.
-```
-
----
-
-## 🔗 Git Compare Workflow
-
-```
-git fetch origin
-git checkout staging
-git pull origin staging
-git checkout fix/home-screen-scope
-git log origin/staging..HEAD
-git diff origin/staging..HEAD --stat
-```
-
-**Diff Summary:** 1 file changed, 1 insertion(+) — `app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt`
+1. ✅ Wraps the unprotected `startActivity(intent)` in a `try-catch` block
+2. ✅ Provides a user-facing `Toast` fallback when no browser activity can handle the S3 HTTPS link
+3. ✅ Compiles successfully with zero errors
+4. ✅ Is committed on the new branch `fix/activity-not-found-crash-homescreen` at commit `e69376c`
+5. ✅ Is pushed to origin and ready for PR review

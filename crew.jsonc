@@ -2,9 +2,8 @@
   "name": "android_crash_fix_agent",
   "agents": [
     "android_crash_analyst",
-    "android_codebase_investigator",
-    "android_fix_architect",
-    "android_code_modifier",
+    "android_prompt_engineer",
+    "android_antigravity_operator",
     "android_build_verifier",
     "android_device_operator",
     "android_git_release_manager",
@@ -20,35 +19,23 @@
       "output_file": "output/crash_intake_report.md"
     },
     {
-      "name": "codebase_investigation_task",
-      "description": "Using the crash intake report and Android project path {android_project_path}, investigate which source files and Android components are related to the crash. You must call project_tree_tool to list relevant files, call project_search_tool to search for class names, file names, or patterns from the stack trace, and call file_read_tool to read small relevant files to understand the code context. Do not invent file paths; only discuss files verified by tools. If a file path is guessed but not found, clearly mark it as inferred/not found. CRITICAL CONSTRAINT: The investigation must only use file paths and contents confirmed by search/read tools, must mark any unconfirmed paths as inferred, and must not claim that any files were changed or edited.",
-      "expected_output": "A structured markdown codebase investigation report with sections: Relevant Files, Relevant Components, Architecture Area, Search Queries Run, Findings, Evidence From Stack Trace, and Files To Inspect First.",
-      "agent": "android_codebase_investigator",
+      "name": "prompt_engineering_task",
+      "description": "Using the crash intake report and Android project path {android_project_path}, write a comprehensive natural-language instruction brief for an autonomous coding agent to search the codebase, plan the fix, and apply edits. The brief must contain at minimum: 1. Objective: fix this specific crash safely and minimally. 2. Crash Summary: condensed from the intake report (exception type, failing method/class, stack trace, severity). 3. Investigation Instructions: instruction to explore the codebase (do not assume file paths) to locate the root cause. 4. Fix Constraints: minimal, lifecycle-safe, MVVM-consistent Compose/Kotlin changes only; do not add unrelated refactors; must not break existing tests. 5. Definition of Done: apply changes directly to the working tree, leave it ready for compilation. Crucially, the brief must include a fenced block clearly labeled 'FIX_INSTRUCTION' containing the exact single prompt string to be passed verbatim to 'agy -p'.",
+      "expected_output": "A markdown engineering brief containing the prompt engineering result and a fenced code block labeled FIX_INSTRUCTION with the verbatim prompt string inside.",
+      "agent": "android_prompt_engineer",
       "context": [
         "crash_intake_task"
       ],
       "markdown": true,
-      "output_file": "output/codebase_investigation.md"
+      "output_file": "output/antigravity_brief.md"
     },
     {
-      "name": "fix_planning_task",
-      "description": "Using the crash intake report and codebase investigation report, analyze the target code logic and devise a safe and minimal Android crash fix plan. Identify the root cause, target files, recommended Kotlin or Compose edits, and validation checklist. The plan must contain the exact code blocks (Before and After) to be modified, including any required imports, so that the code modifier can apply them directly without ambiguity. CRITICAL CONSTRAINT: The fix plan must detail minimal changes only, providing exact search and replace blocks. Do not perform editing tools in this task, only plan the changes.",
-      "expected_output": "A structured markdown fix plan with sections: Root Cause, Proposed Fix, Files To Modify, and Validation Steps. Include the exact code blocks (Before and After) for each modification.",
-      "agent": "android_fix_architect",
+      "name": "antigravity_execution_task",
+      "description": "Read output/antigravity_brief.md, extract the verbatim prompt string inside the FIX_INSTRUCTION fenced code block, and call antigravity_bridge_tool exactly once with the android_project_path and the extracted prompt as fix_instruction. CRITICAL CONSTRAINT: You must report a hard failure if the tool returns success: false, and list all changed files and diff stat on success.",
+      "expected_output": "A markdown execution log showing the fix instruction sent, list of files changed, diff stat, and success/failure result.",
+      "agent": "android_antigravity_operator",
       "context": [
-        "crash_intake_task",
-        "codebase_investigation_task"
-      ],
-      "markdown": true,
-      "output_file": "output/fix_plan.md"
-    },
-    {
-      "name": "code_modification_task",
-      "description": "Using the approved fix plan from fix_planning_task and project path {android_project_path}, modify the target files. You MUST read the target files first, identify the exact lines of code that need to be changed, and call file_edit_tool to apply the correct replacement code (such as the resolveActivity check/try-catch and required imports in app/src/main/java/com/ananinja/tms/ui/home/HomeScreen.kt and app/src/main/AndroidManifest.xml). Do NOT make dummy replacements. Your replacement must solve the crash. CRITICAL CONSTRAINT: You must modify files strictly using the file_edit_tool and ensure the relative path and target/replacement code match exactly. Do not leave the file unchanged.",
-      "expected_output": "A markdown modification log showing which files were edited and the output results returned by the file_edit_tool.",
-      "agent": "android_code_modifier",
-      "context": [
-        "fix_planning_task"
+        "prompt_engineering_task"
       ],
       "markdown": true,
       "output_file": "output/modification_result.md"
@@ -59,7 +46,7 @@
       "expected_output": "A markdown verification report showing compilation status, exit codes, and unit test pass rates.",
       "agent": "android_build_verifier",
       "context": [
-        "code_modification_task"
+        "antigravity_execution_task"
       ],
       "markdown": true,
       "output_file": "output/build_verification.md"
@@ -81,7 +68,7 @@
       "expected_output": "A markdown git release report showing the created branch name, commit hash, and status of git changes.",
       "agent": "android_git_release_manager",
       "context": [
-        "code_modification_task",
+        "antigravity_execution_task",
         "build_verification_task"
       ],
       "markdown": true,
@@ -89,14 +76,13 @@
     },
     {
       "name": "final_report_task",
-      "description": "Consolidate the crash intake, codebase investigation, fix planning, modification logs, build verification, device verification screenshots, and git release branch details into a final PR-ready engineering report for the project at {android_project_path}.",
+      "description": "Consolidate the crash intake, prompt engineering details, antigravity execution results, modification logs, build verification, device verification, and git release branch details into a final PR-ready engineering report for the project at {android_project_path}.",
       "expected_output": "A final markdown PR report with sections: Title, Executive Summary, Crash Details, Root Cause Hypothesis, Modifications Made, Git Branch & Commit Status, Test Plan & Verification Results (showing build/test status), Manual QA Checklist, Risk Level, and Reviewer Checklist.",
       "agent": "android_pr_report_compiler",
       "context": [
         "crash_intake_task",
-        "codebase_investigation_task",
-        "fix_planning_task",
-        "code_modification_task",
+        "prompt_engineering_task",
+        "antigravity_execution_task",
         "build_verification_task",
         "device_verification_task",
         "git_release_task"

@@ -1,113 +1,169 @@
-# Crash Intake Report: `ActivityNotFoundException` on HomeScreen Tap
+# Crash Intake Report: `ActivityNotFoundException` on Opening S3 Link from HomeScreen
 
 ## Summary
-A **fatal** `ActivityNotFoundException` occurs when a user taps a clickable element on the `HomeScreen` (Compose UI) that attempts to open an HTTPS URL (`https://bra-tools.s3.eu-west-1.amazonaws.com/...`). The device lacks any application registered to handle the `ACTION_VIEW` intent for this URL, causing the crash.
+A fatal `android.content.ActivityNotFoundException` occurred when the user tapped a clickable element in the `HomeScreen` composable. The app attempted to open an HTTPS URL pointing to an AWS S3 bucket (`bra-tools.s3.eu-west-1.amazonaws.com`) but no Activity on the device could handle the implicit `ACTION_VIEW` intent. This typically means the device lacks a browser or the intent's data URI is malformed/unhandled.
+
+---
 
 ## Confirmed Facts
-- **Exception Type:** `android.content.ActivityNotFoundException`
-- **Exception Message:** `No Activity found to handle Intent { act=android.intent.action.VIEW dat=https://bra-tools.s3.eu-west-1.amazonaws.com/... }`
-- **Failing Source Location:** `com.ananinja.tms.ui.home.HomeScreenKt.HomeScreen$lambda$38$0$0(HomeScreen.kt:271)` — line 271 of `HomeScreen.kt`
-- **UI Trigger:** Compose `ClickableNode` tap gesture detected via `TapGestureDetector` on the HomeScreen.
-- **Intent Action:** `android.intent.action.VIEW`
-- **Intent Data URI:** `https://bra-tools.s3.eu-west-1.amazonaws.com/...` (URL truncated in crash log, ends with `...` indicating long query/path)
-- **App Version:** 1.0.22 (24)
-- **Date/Time:** `Mon Jul 20 2026 06:26:48 GMT+0500` (Pakistan Standard Time)
-- **Crash is produced on the main thread** (UI thread) — visible from the stack trace ending in `Looper.loop` -> `ActivityThread.main`.
+- **Exception type**: `android.content.ActivityNotFoundException`
+- **Exception message**: `No Activity found to handle Intent { act=android.intent.action.VIEW dat=https://bra-tools.s3.eu-west-1.amazonaws.com/... }`
+- **Failing user code**:  
+  `com.ananinja.tms.ui.home.HomeScreenKt.HomeScreen$lambda$38$0$0(HomeScreen.kt:271)`  
+  This is a lambda (likely an `onClick` handler) inside Jetpack Compose's `HomeScreen` composable.
+- **Trigger action**: User tap on a clickable composable (detected via `ClickableNode` / `TapGestureDetector`).
+- **Intent details**:
+  - Action: `android.intent.action.VIEW`
+  - Data URI: `https://bra-tools.s3.eu-west-1.amazonaws.com/...` (truncated in log)
+- **App version**: 1.0.22 (build 24)
+- **Platform**: Android
+- **Date**: Mon Jul 20 2026 06:26:48 GMT+0500 (Pakistan Standard Time)
+- **Time zone hint**: User in Pakistan (GMT+5), suggesting possible network/regional configuration differences.
+- **Firebase Crashlytics present**: Crash was captured and reported by Crashlytics.
+
+---
 
 ## Assumptions
-- The URL is being opened by the system (via implicit intent) rather than a WebView or in-app browser.
-- The user likely does **not** have a web browser installed or the default browser has been disabled/uninstalled on that device.
-- The URL might be dynamically constructed or fetched from server data, and the truncated part could contain additional path/query parameters.
-- The crash occurs during normal usage, likely tapping a link/button in the HomeScreen that opens an external resource (e.g., a PDF, image, or web page hosted on AWS S3).
+1. **The truncated URI ends with a valid path** (e.g., a PDF, image, or other downloadable file). The actual full URI is not visible in the log.
+2. **The clickable element is either**:
+   - A `Text` or `Image` with a `clickable` modifier that opens a link.
+   - A button or card that navigates to an external URL.
+3. **The user does not have a default browser installed** OR the device's browser cannot handle the specific HTTPS URL (e.g., because of missing `https` scheme handling, restricted profile, or custom ROM).
+4. **The crash occurs on the main thread** (UI thread), as `startActivity` must be called from the UI thread.
+5. **The device likely has no WebView-based browser** or the intent resolution failed due to a missing Activity for `ACTION_VIEW` with an `https` scheme.
+
+---
 
 ## Exception Type
+```
+android.content.ActivityNotFoundException
+```
 
-```
-android.content.ActivityNotFoundException: No Activity found to handle Intent { act=android.intent.action.VIEW dat=https://bra-tools.s3.eu-west-1.amazonaws.com/... }
-```
+---
 
 ## Stack Trace Signals
 
-| Signal | Detail |
-|--------|--------|
-| **Top of stack** | `Instrumentation.checkStartActivityResult()` throws the exception |
-| **User code entry** | `HomeScreenKt.HomeScreen$lambda$38$0$0(HomeScreen.kt:271)` — this is likely a lambda inside a Composable function that calls `startActivity()` |
-| **Compose chain** | `ClickableNode` -> `TapGestureDetector` -> pointer input handling |
-| **Android framework** | `Activity.startActivity()` -> `Instrumentation.execStartActivity()` |
-| **Thread** | Main thread (UI) — evident by `Looper.loop` -> `ActivityThread.main` |
-| **Other threads** | All other threads are idle/waiting (e.g., `DefaultDispatcher`, `Okio Watchdog`, Firebase threads) — no concurrent crash cause |
+### Key frames (top to bottom):
 
-## Likely Affected Layer
-- **Application Layer:** `HomeScreen.kt` Composable function
-- **Android Framework:** Implicit intent resolution for `ACTION_VIEW` — no browser/intent handler registered on device
-- **Compose UI Layer:** `ClickableNode` -> `TapGestureDetector` — user interaction triggers the intent
+| Frame | Method/File | Line | Signal |
+|-------|-------------|------|--------|
+| 1 | `Instrumentation.checkStartActivityResult` | 2018 | **Root cause** – OS detected no Activity to handle the intent. |
+| 2–7 | `startActivityForResult` → `startActivity` | – | Standard Android Activity launch chain. |
+| 8 | `HomeScreenKt.HomeScreen$lambda$38$0$0` | 271 | **User code trigger** – the lambda that starts the intent. |
+| 9–12 | `ClickableNode` -> `TapGestureDetector` | – | **User interaction** – tap gesture detected. |
+| 13–17 | Coroutine dispatch (`DispatchedTask`, `CancellableContinuationImpl`) | – | **Async execution** – the tap handler is running on a coroutine. |
+| 18–25 | Compose pointer input (`SuspendingPointerInputModifierNodeImpl`, `HitPathTracker`) | – | **UI event delivery** through Compose system. |
+| 26–45 | Android View system (`ViewGroup.dispatchTouchEvent`, `DecorView`, `ViewRootImpl`) | – | **Standard touch event dispatch** down to Compose. |
+
+### Thread: Main (1: main)
+- The entire crash happens on the **main thread**.
+
+---
+
+## Likely Affected Android Layer
+**Application Layer → UI Layer (Jetpack Compose)**  
+Specifically:
+- **`HomeScreen.kt`** at line 271 – the lambda that builds the `ACTION_VIEW` intent.
+- The intent is **not validated** before calling `startActivity`.
+- No `try-catch` around `startActivity` to catch `ActivityNotFoundException`.
+
+---
 
 ## Severity
-**FATAL** — Application crashes completely, user cannot continue without killing and restarting the app. The crash is unrecoverable in the current flow.
+**CRITICAL / FATAL**  
+- The app crashes immediately upon user tap.
+- User cannot use the feature that triggers this link.
+- Potential for high user impact if this link is frequently accessed.
+
+---
 
 ## Reproduction Clues
-- **Prerequisites:**
-  1. Device **without** a web browser installed (or default browser disabled).
-  2. App version **1.0.22 (24)**.
-  3. User taps a specific UI element on the `HomeScreen` that attempts to open `https://bra-tools.s3.eu-west-1.amazonaws.com/...` via implicit intent.
-  
-- **Steps to reproduce:**
-  1. Launch the app (version 1.0.22).
-  2. Navigate to the HomeScreen.
-  3. Tap the clickable element associated with the lambda at `HomeScreen.kt:271`.
-  4. The app crashes with `ActivityNotFoundException`.
 
-- **Possible UI triggers:** A button or link labeled "View Tools", "Open Resource", or similar that fetches a URL from server data.
+### Required conditions:
+1. User must be on the **HomeScreen** of the app (com.ananinja.tms).
+2. User must tap on a UI element that triggers an **implicit intent** with `ACTION_VIEW` and an **HTTPS URL** pointing to `bra-tools.s3.eu-west-1.amazonaws.com`.
+3. The device must have **no Activity that can handle `ACTION_VIEW` for `https://`**.
+
+### Most probable scenario:
+- The user is on a device with **no browser installed** (e.g., a restricted device, kiosk mode, or a pure Android TV device).
+- Or the device's browser is **disabled**.
+- Or the intent is malformed (e.g., the URI is missing the scheme after truncation, but this is unlikely because the log shows `https://`).
+
+### Suggested manual repro:
+1. Run the app on an emulator with **no browser** (or uninstall Chrome).
+2. Navigate to the HomeScreen.
+3. Tap the element that opens the S3 link.
+4. Observe `ActivityNotFoundException`.
+
+---
 
 ## Device or OS Clues
-- **No specific device/OS version** is provided in the crash log (only stack traces, no device model/OS API level).
-- The crash could occur on any Android version, but devices with no or minimal pre-installed apps (e.g., Android Go, custom ROMs, enterprise-managed devices) are more likely to be affected.
-- Timezone: Pakistan Standard Time (GMT+5).
+- **No device model / OS version** is provided in the crash log.
+- **Time zone**: `GMT+0500 (Pakistan Standard Time)` → User is likely in Pakistan.
+- **Notable**: The crash log includes many background threads (Firebase, Okio, Kotlin coroutines) but no indication of specific device restrictions.
+- **No `Build.MODEL` or `Build.VERSION.SDK_INT`** available from the given data.
+
+---
 
 ## App Version Clues
-- App version: **1.0.22 (24)**
-- The crash might be introduced recently in this version if URL opening logic was added/changed.
+- **Version name**: `1.0.22`
+- **Version code**: `24`
+- This is the only version in the log; no regression information is available.
+
+---
 
 ## Missing Information
-- **Device model and OS API level** — essential to know if this is widespread or device-specific.
-- **Full URL** — the truncated URL (`...`) prevents understanding the exact resource type.
-- **Crash rate/affected users** — how often this crash occurs (percentage of sessions).
-- **User action context** — what the user tapped (button text/icon) and the screen state.
-- **Whether the app uses `PackageManager.queryIntentActivities()`** before launching the intent (to check if a handler exists).
-- **If a fallback mechanism exists** (e.g., opening in a WebView, showing a dialog, or using `CustomTabsIntent`).
+
+1. **Full URI** after `https://bra-tools.s3.eu-west-1.amazonaws.com/...` – the actual file/resource path is truncated. This is critical to understand if the URL is valid.
+2. **Device model and OS version** – needed to know if this is a known device issue.
+3. **Existing browser apps on the device** – unknown.
+4. **Whether the user is in a work profile or child mode** – could explain missing browser Activity.
+5. **Code context of `HomeScreen.kt:271`** – the exact line that builds the intent.
+6. **How the URI is obtained** – hardcoded, from network, or from user input.
+7. **Previous occurrences** – first time or recurring crash in this session.
+8. **Whether the user has ever successfully opened this link before** – no session history provided.
+9. **Whether `PackageManager.queryIntentActivities()` was called to check availability** – very likely not, as there is no such check in the stack trace.
+
+---
 
 ## Next Investigation Steps
 
-### 1. Check the source code at `HomeScreen.kt:271`
-- Locate the lambda `HomeScreen$lambda$38` to understand what triggers the intent.
-- Determine if the URL is hardcoded or dynamically retrieved (e.g., from API response, DeepLink, or configuration).
+1. **Check the full source code** of `HomeScreen.kt` around line 271 to see how the intent is created. Look for:
+   ```kotlin
+   val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://..."))
+   context.startActivity(intent)
+   ```
+2. **Add a safety check** before starting the activity:
+   ```kotlin
+   val intent = Intent(Intent.ACTION_VIEW, uri)
+   if (intent.resolveActivity(packageManager) != null) {
+       context.startActivity(intent)
+   } else {
+       // Fallback: show a dialog, toast, or open in WebView
+   }
+   ```
+3. **Wrap `startActivity` in a `try-catch`** to handle `ActivityNotFoundException` gracefully:
+   ```kotlin
+   try {
+       context.startActivity(intent)
+   } catch (e: ActivityNotFoundException) {
+       // Log and show user-friendly message
+   }
+   ```
+4. **Verify the S3 URI** is valid and accessible. Check if the bucket policy allows public access.
+5. **Collect device and OS version** from Firebase Crashlytics dashboard for this specific crash (session `6A5D794E01C400013A92A485EA6563E3_DNE_0_v2`).
+6. **Check if the app targets a specific device type** (e.g., kiosk, TV, or enterprise devices) that might lack a default browser.
 
-### 2. Add intent handler verification before launching
-- **Recommended fix:** Use `PackageManager.resolveActivity()` before calling `startActivity()`:
-  ```kotlin
-  val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-  if (intent.resolveActivity(packageManager) != null) {
-      context.startActivity(intent)
-  } else {
-      // Show error or fallback e.g., open in a WebView
-  }
-  ```
+---
 
-### 3. Consider using `CustomTabsIntent` or in-app WebView
-- Instead of implicit intent, use `CustomTabsIntent.Builder().build().launchUrl(context, uri)` (Chrome Custom Tabs) which gracefully handles missing browsers.
+## Summary Table
 
-### 4. Review URL construction logic
-- Ensure the URL is properly validated and not malformed.
-- Check if the `...` truncation is from the crash logger or actual intent data — long URLs may be truncated by Crashlytics.
-
-### 5. Monitor device distribution in Crashlytics
-- Look at the "Devices" and "OS" tabs in the Crashlytics dashboard for this issue (`9b26cd77e392a55e6224dcfd78f509f7`) to identify device patterns.
-
-### 6. Add error logging
-- Wrap the `startActivity()` call in a try-catch to log the URL and device state without crashing.
-
-### 7. Test on emulators without browsers
-- Set up an emulator that has no web browser installed (or remove Chrome) to reproduce the issue.
-
-### 8. Consider using Android App Links or Deep Links
-- If the URL belongs to the app’s domain/functionality, consider handling it directly via `AndroidManifest.xml` intent filters.
+| Category | Details |
+|----------|---------|
+| **Exception** | `android.content.ActivityNotFoundException` |
+| **File** | `HomeScreen.kt:271` |
+| **Action** | User tap → startActivity(ACTION_VIEW, https://...) |
+| **URI** | `https://bra-tools.s3.eu-west-1.amazonaws.com/...` |
+| **Root Cause** | No Activity (browser) installed/enabled to handle HTTPS intent |
+| **Severity** | Critical – app crashes on user interaction |
+| **Fix** | Add intent resolution check + try-catch + fallback UI |
