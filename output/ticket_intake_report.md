@@ -1,56 +1,97 @@
 # Ticket Intake Report
 
-## Ticket Type
-**Feature**
+**Ticket Type:** Fix  
+*(Classified as Fix because the ticket describes an error/crash when the application attempts to contact the GitHub REST API, resulting in a network failure that likely disrupts functionality.)*
+
+---
 
 ## Summary
-The Toss screen currently only supports a virtual coin toss to determine which team wins the toss. Users are requesting an additional **manual system** so they can directly select the toss winner without performing the coin toss. This enhancement will give users the flexibility to skip the animated toss and manually assign the winner, streamlining the match setup process.
+The application fails to retrieve data from the GitHub REST API due to a DNS resolution error for `api.github.com`. The underlying exception (NameResolutionError) indicates that the hostname could not be resolved to an IP address, causing the HTTPS connection to fail after maximum retries. The specific endpoint being called is `/repos/ChFardeelAzhar/CricScore/issues/8`. This prevents features that depend on GitHub data (e.g., issue tracking, feedback) from functioning and may lead to an unhandled exception or crash.
+
+---
 
 ## Confirmed Facts
-- In the current Toss screen, the only available interaction is a coin toss simulation; there is no option for manual winner selection.
-- Steps to reproduce the missing functionality:
-  1. Click “Start New Match”
-  2. Complete match setup and tap “Proceed to Toss”
-  3. Observe that no manual system exists to choose the toss winner
-- The user explicitly states, “currently user have to do the toss with coin on the toss screen” and wants a “manuall [sic] system also”
-- The requested feature is to add an alternative way to declare the toss winner, overriding or bypassing the coin toss.
+- The error occurred while contacting the GitHub REST API.
+- The attempted connection was to `api.github.com` on port 443 (HTTPS).
+- The URL path is `/repos/ChFardeelAzhar/CricScore/issues/8`, suggesting an attempt to fetch issue #8 from a specific repository.
+- The failure is classified as `NameResolutionError` with the message: `Failed to resolve 'api.github.com' ([Errno 8] nodename nor servname provided, or not known)`.
+- The stack trace originates from Python’s `requests` library (`HTTPSConnectionPool`), indicating the error was raised by a component using Python, possibly a build script, backend service, or a cross-compiled library within the Android app.
+- No error handling or retry‑with‑backoff appears to be in place; the connection exhausted its retries and propagated a fatal exception.
+
+---
 
 ## Assumptions
-- The manual selection should coexist with the existing coin toss (i.e., both methods remain available).
-- The manual system will likely include UI controls (e.g., buttons or a dropdown) to choose which team won the toss.
-- The winner chosen manually will proceed to the same next step (e.g., choosing to bat or bowl) as when determined by the coin toss.
-- No backend changes are required beyond those already used for coin toss results; the selection can be handled locally until the match is saved.
+- The ticket likely came from an Android application or its related toolchain, as the context is an Android engineering analysis.
+- If the error is in the Android app itself, the app is using a networking library (perhaps Ktor, OkHttp, or a Python bridge) to interact with the GitHub API. The Python trace might be from an embedded Python environment (e.g., Chaquopy) or a backend service, but for this intake we assume it affects the Android client.
+- The device has at least intermittent internet connectivity, but DNS resolution specifically for `api.github.com` fails. This could be due to a local network misconfiguration, VPN, custom DNS settings, or an upstream DNS outage.
+- The feature relying on this API call is a core function (e.g., fetching live scores or issue feedback), and the failure is not gracefully handled, potentially causing a crash or an unusable state.
+
+---
 
 ## Expected Output
-- A new user interface element on the Toss screen (e.g., two buttons labelled “Team A Wins Toss” and “Team B Wins Toss” or a toggle).
-- When the user taps one, the toss winner is set immediately, skipping the coin animation.
-- The match flow continues exactly as it would after a successful coin toss (user can choose batting/bowling etc.).
-- No impact on data consistency; the final toss outcome is logged the same way.
+- The application should handle DNS resolution failures gracefully:
+  - Display a user‑friendly error message (e.g., “Unable to connect to server. Please check your network connection.”).
+  - Not crash or freeze the UI.
+  - Optionally retry with exponential backoff or prompt the user to retry.
+- If the data is non‑critical, the app should fall back to cached or default content.
+- Detailed diagnostic logs should be recorded for developers without exposing stack traces to the end user.
+- When the network condition returns to normal, the feature should resume working without manual intervention.
+
+---
 
 ## Required Steps
-1. **Analyze** existing Toss screen UI component and coin toss logic.
-2. **Design** the manual selection UI (placement, style, labels) and get UX approval.
-3. **Implement** the new UI element(s) in the Toss screen layout.
-4. **Integrate** the manual selection with the toss decision handler – the same function that records the toss winner should be called regardless of method.
-5. **Update** any state management/view model to recognise when a manual winner is chosen and disable/omit the coin animation.
-6. **Add analytics** tracking to differentiate manual toss vs. coin toss (optional but recommended).
-7. **Write unit and UI tests** for manual selection path, including edge cases (e.g., rapid clicks, screen rotation).
-8. **Perform QA** on various devices to ensure the new option is accessible and the flow is seamless.
+1. **Root‑Cause Analysis**
+   - Reproduce the issue on various network conditions (Wi‑Fi, mobile data, VPN, custom DNS).
+   - Check whether the DNS failure is transient or persistent for `api.github.com`.
+   - Inspect whether the device is using a proxy or a DNS‑over‑HTTPS setting that may block or alter resolution.
+
+2. **Code‑Level Mitigations**
+   - Implement proper exception handling in the network layer to catch `UnknownHostException` (Android) / `NameResolutionError` (Python) and convert it to a managed error state.
+   - Add a connectivity checker (e.g., `ConnectivityManager`) before network calls, and perform an explicit DNS resolution test if needed.
+   - Introduce an automatic retry mechanism with exponential backoff, but ensure total timeout is capped to avoid ANRs.
+   - Provide a fallback path (e.g., serve locally cached data if available and show a stale‑data indicator).
+
+3. **UI/UX Improvements**
+   - Design an error state for the view that shows a meaningful message and a “Retry” button.
+   - Ensure no raw exception details are leaked to the user interface.
+
+4. **Logging & Monitoring**
+   - Add structured logging (e.g., `Timber`) to capture the precise error details, network state, and the endpoint URL when the failure occurs.
+   - Integrate with crash reporting (e.g., Firebase Crashlytics) to monitor the frequency and conditions of this error.
+
+5. **Testing**
+   - Simulate DNS failures using test tools or by temporarily overriding DNS settings.
+   - Verify that the app remains stable, does not crash, and correctly shows the error/retry UI.
+
+---
 
 ## Acceptance Criteria
-- On the Toss screen, the user can manually declare which team won the toss without initiating a virtual coin toss.
-- After manual selection, the toss winner is correctly reflected (e.g., team name, toss decision prompt).
-- The manual selection is visually clear and does not interfere with the existing coin toss option; both must remain functional.
-- The chosen team advances to the next step (batting/bowling selection) as normal.
-- No data corruption or state inconsistencies occur when manual selection and coin toss are used interchangeably.
+*These are not explicitly provided in the raw ticket; the following are reasonable criteria for a fix.*
+- When a DNS resolution failure occurs for `api.github.com`, the app does **not** crash or display a raw stack trace.
+- The user is shown a clear error indication, such as a snackbar or inline message: “Could not load data. Check your connection and try again.”
+- A “Retry” action is available; upon network recovery, the request succeeds and UI updates accordingly.
+- The error is logged with sufficient detail (endpoint, error type, timestamp) for diagnostics.
+- The feature performs as expected under normal network conditions (no regression).
+
+---
 
 ## Severity
-Not applicable – this is a feature request, not a bug or crash.
+**High**  
+The error blocks a network‑dependent feature and, if unhandled, may cause a crash that requires the user to restart the app. While not a total application outage, it significantly degrades user experience for anyone using the affected functionality.
+
+---
 
 ## Missing Information
-- **Manual selection scope:** Should the manual system allow the user to also choose whether the toss winner will bat or bowl immediately, or only the winner itself? The description mentions only “who won the toss”. Clarification needed.
-- **UI / UX specifications:** No design mockups or guidelines on placement of the manual button(s). Need to define whether it’s a toggle, dropdown, or dedicated buttons, and how it coexists with the animated coin.
-- **Edge cases:** What happens if the user starts a coin toss animation and then mid‑animation manually selects a winner? Should the coin toss be cancellable?
-- **Accessibility:** Requirements for screen reader labels, tap target sizes, etc., are missing.
-- **User permissions / game state:** Are there any match states where manual toss should be disabled (e.g., after toss already completed, in a resumed match)?
-- **Analytics / tracking:** Is there a need to log manual vs. coin toss usage for business metrics?
+- **Source of the error:** Is this from an Android client, a CI/CD script, or a backend service used by the app? Clarifying the environment will guide the fix approach.
+- **Device/Platform details:** Android version, device model, network type (Wi‑Fi/mobile), and any custom DNS or proxy settings.
+- **Reproduction steps:** Is it consistently reproducible? Does it happen on specific networks or regions?
+- **App version:** Which build/version is affected? Has this worked before (regression)?
+- **Impact scope:** How many users are experiencing this? Is it tied to a specific screen or feature?
+- **Existing error handling:** Is there already a try‑catch around this API call? If so, why is the exception not handled?
+- **Criticality:** Is fetching GitHub issues a core feature (e.g., live scores from that repo) or a secondary feedback channel?
+- **Acceptance criteria:** The raw ticket contains no explicit AC; the ones listed above are inferred and should be validated with the product owner.
+
+---
+
+**Prepared by:** Android Ticket Analyst  
+**Date:** [Current date would be inserted here]

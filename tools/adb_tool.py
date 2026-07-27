@@ -3,6 +3,7 @@ import re
 import shutil
 import subprocess
 import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Type
 from crewai.tools import BaseTool
@@ -11,7 +12,7 @@ from pydantic import BaseModel, Field
 class ADBInput(BaseModel):
     command_type: str = Field(
         ...,
-        description="The ADB operation to execute. Allowed: 'list_devices', 'launch_app', 'screencap', 'screenrecord_start', 'screenrecord_stop', 'screen_record_start', 'screen_record_stop_and_pull', 'get_logcat', 'input_tap', 'input_text', 'input_keyevent'"
+        description="The ADB operation to execute. Allowed: 'list_devices', 'launch_app', 'screencap', 'screenrecord_start', 'screenrecord_stop', 'screen_record_start', 'screen_record_stop_and_pull', 'get_logcat', 'input_tap', 'input_text', 'input_keyevent', 'dump_layout'"
     )
     package_name: str = Field(
         default="com.ananinja.tms",
@@ -46,7 +47,7 @@ class ADBTool(BaseTool):
     name: str = "adb_tool"
     description: str = (
         "Interacts with connected Android devices or emulators using ADB. "
-        "Allows listing devices, launching apps, getting logcat dumps, taking screenshots, and recording video. "
+        "Allows listing devices, launching apps, getting logcat dumps, taking screenshots, recording video, and dumping UI layouts. "
         "All outputs are saved to the output/ directory. Operates securely through parameterized inputs."
     )
     args_schema: Type[BaseModel] = ADBInput
@@ -80,6 +81,16 @@ class ADBTool(BaseTool):
             return len(lines) > 1 and any("device" in line for line in lines[1:])
         except Exception:
             return False
+
+    def _parse_bounds(self, bounds_str: str):
+        # bounds_str is like "[100,500][400,600]"
+        m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds_str)
+        if m:
+            x1, y1, x2, y2 = map(int, m.groups())
+            center_x = (x1 + x2) // 2
+            center_y = (y1 + y2) // 2
+            return center_x, center_y
+        return None
 
     def _run(self, command_type: str, package_name: str = "com.ananinja.tms", activity_name: str = "", filename: str = "", x: int = 0, y: int = 0, text_content: str = "", key_code: int = 0) -> str:
         adb_exec = self._get_adb_path()
@@ -144,7 +155,6 @@ class ADBTool(BaseTool):
                 time.sleep(1)
 
                 # Start screenrecord in the background
-                # We limit size to keep file size small
                 cmd = [adb_exec, "shell", "screenrecord", "--size", "720x1280", "/sdcard/record.mp4"]
                 subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return "Success: Screen recording started in the background on the device."
@@ -218,6 +228,52 @@ class ADBTool(BaseTool):
                 return f"Success: Sent key event {key_code}. Output: {res.stdout}"
             except Exception as e:
                 return f"Error executing key event: {str(e)}"
+
+        elif command_type == "dump_layout":
+            try:
+                # Dump layout on device
+                subprocess.run([adb_exec, "shell", "uiautomator", "dump", "/sdcard/window_dump.xml"], check=True, timeout=15)
+                # Pull to a local temporary file in output/
+                temp_xml = os.path.join("output", "window_dump.xml")
+                subprocess.run([adb_exec, "pull", "/sdcard/window_dump.xml", temp_xml], check=True, timeout=15)
+                # Cleanup on device
+                subprocess.run([adb_exec, "shell", "rm", "/sdcard/window_dump.xml"], timeout=10)
+                
+                # Parse layout XML
+                if not os.path.exists(temp_xml):
+                    return "Error: Could not retrieve window dump XML from device."
+                    
+                tree = ET.parse(temp_xml)
+                root = tree.getroot()
+                
+                elements = []
+                for node in root.iter("node"):
+                    text = node.get("text", "").strip()
+                    desc = node.get("content-desc", "").strip()
+                    res_id = node.get("resource-id", "").strip()
+                    cls = node.get("class", "").strip()
+                    bounds = node.get("bounds", "").strip()
+                    clickable = node.get("clickable", "") == "true"
+                    
+                    if text or desc or clickable:
+                        coords = self._parse_bounds(bounds)
+                        if coords:
+                            cx, cy = coords
+                            elem_type = cls.split(".")[-1] if cls else "Node"
+                            label = text if text else desc
+                            elements.append(
+                                f"- [{elem_type}] text='{label}' id='{res_id}' clickable={clickable} center=({cx}, {cy})"
+                            )
+                
+                # Cleanup local temp file
+                if os.path.exists(temp_xml):
+                    os.remove(temp_xml)
+                    
+                if not elements:
+                    return "No visible interactive layout elements found on the screen."
+                return "Visible UI Elements on Screen:\n" + "\n".join(elements)
+            except Exception as e:
+                return f"Error dumping screen layout: {str(e)}"
 
         else:
             return f"Error: Unknown command_type '{command_type}'."

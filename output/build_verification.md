@@ -1,70 +1,40 @@
----
+Gradle execution finished with exit code 0.
 
-# Build Verification Report
+--- Standard Output ---
 
-## Project: CricScore
+> Configure project :app
+WARNING: The option setting 'android.disallowKotlinSourceSets=false' is experimental.
+The current default is 'true'.
 
-**Path:** `/Users/retailopakistan/AndroidStudioProjects/CricScore`
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:generateDebugRFile UP-TO-DATE
+> Task :app:kspDebugKotlin UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:hiltSyncDebug UP-TO-DATE
+> Task :app:hiltAggregateDepsDebug UP-TO-DATE
+> Task :app:hiltJavaCompileDebug UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :app:kspDebugUnitTestKotlin UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:compileDebugUnitTestKotlin UP-TO-DATE
 
----
-
-## 1. Requested Tasks (Dev Flavor)
-
-| Task | Status |
-|------|--------|
-| `:app:compileDevDebugKotlin` | ❌ **FAILED** |
-| `:app:compileDevDebugUnitTestKotlin` | ❌ **FAILED** |
-
-### Error Details
-
-```
-FAILURE: Build failed with an exception.
-
-* What went wrong:
-Cannot locate tasks that match ':app:compileDevDebugKotlin' as task 'compileDevDebugKotlin' 
-not found in project ':app'. Some candidates are: 'compileDebugKotlin'.
-```
-
-**Root Cause:** The project does **not** define a `Dev` build variant/flavor. The available debug variant task is `compileDebugKotlin`.
-
----
-
-## 2. Fallback Tasks (Standard Debug Flavor)
-
-| Task | Exit Code | Status |
-|------|-----------|--------|
-| `:app:compileDebugKotlin` | `0` | ✅ **SUCCESS** (UP-TO-DATE) |
-| `:app:compileDebugUnitTestKotlin` | `0` | ✅ **SUCCESS** (UP-TO-DATE) |
-
-**Build output:** All 24 actionable tasks completed UP-TO-DATE in 2s. No compilation errors, no warnings (beyond the experimental `android.disallowKotlinSourceSets` flag).
-
----
-
-## 3. Unit Test Execution
-
-| Task | Exit Code | Status |
-|------|-----------|--------|
-| `:app:testDebugUnitTest` | `0` | ✅ **SUCCESS** (UP-TO-DATE) |
-
-**Test output:** All 32 actionable tasks completed UP-TO-DATE in 3s. No test failures, no runtime errors.
-
----
-
-## 4. Summary
-
-| Metric | Value |
-|--------|-------|
-| **Kotlin Compilation** | ✅ Passed |
-| **Unit Test Compilation** | ✅ Passed |
-| **Unit Test Execution** | ✅ Passed |
-| **Overall Exit Code** | `0` |
-| **New Failures Introduced** | None |
-
----
-
-## 5. Notes
-
-- The `Dev` flavor tasks (`compileDevDebugKotlin`, `compileDevDebugUnitTestKotlin`) do **not exist** in this project. The standard `Debug` variant tasks were used as the fallback and all passed cleanly.
-- All three modified files (`TossScreen.kt`, `TossViewModel.kt`, `TossViewModelTest.kt`) compiled and tested without errors.
-- The added unit tests for `onManualTossWinnerSelected` passed successfully as part of `testDebugUnitTest`.
-- No regressions detected in the existing coin-toss flow or any other project code.
+BUILD SUCCESSFUL in 3s
+24 actionable tasks: 24 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.4.1/userguide/configuration_cache_enabling.html

@@ -1,9 +1,9 @@
 #!/bin/bash
 # Auto-generated script to submit PR
 cd "/Users/retailopakistan/AndroidStudioProjects/CricScore"
-git push origin "feat/manual-toss-winner"
+git push origin "fix/android-fix"
 echo "--------------------------------------------------------"
-echo "Code pushed successfully to branch: feat/manual-toss-winner"
+echo "Code pushed successfully to branch: fix/android-fix"
 echo "Please open your browser to compare and create the PR:"
-echo "Compare URL: https://github.com/ChFardeelAzhar/CricScore/compare/feat/manual-toss-winner"
+echo "Compare URL: https://github.com/ChFardeelAzhar/CricScore/compare/fix/android-fix"
 echo "--------------------------------------------------------"

@@ -21,7 +21,7 @@ def parse_subprocess_log(full_log):
     }
     
     # Find started tasks
-    started = re.findall(r"(?:Task Started|Name:\s*)(\w+_task)", full_log)
+    started = re.findall(r"(?:Task Started:?\s*|Name:\s*)(\w+_task)", full_log)
     for t_name in started:
         if t_name in task_mapping:
             idx = task_mapping[t_name]
@@ -32,7 +32,7 @@ def parse_subprocess_log(full_log):
                     task_statuses[i] = "Completed"
                     
     # Find completed tasks
-    completed = re.findall(r"(?:Task Completed|Name:\s*)(\w+_task)", full_log)
+    completed = re.findall(r"(?:Task Completed:?\s*|Name:\s*)(\w+_task)", full_log)
     for t_name in completed:
         if t_name in task_mapping:
             idx = task_mapping[t_name]
@@ -61,58 +61,105 @@ def parse_subprocess_log(full_log):
     completed_count = task_statuses.count("Completed")
     progress_percentage = int((completed_count / 8.0) * 100)
     
-    # Generate HTML task list as horizontal circles
+    # Generate HTML task list as horizontal large circles (size: 46px)
     labels = ["Ingest", "Analyze", "Brief", "Fix", "Compile", "QA", "Release", "Report"]
     emojis = ["📥", "🔍", "📝", "🛠️", "⚙️", "📱", "🚀", "📋"]
     
-    html_tasks = "<div style='display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 15px; margin-bottom: 15px; padding: 10px 0; overflow-x: auto; scrollbar-width: none;'>"
+    # Orbit coordinates: cx=130, cy=100, radius=82
+    positions = [
+        (114, 2, 130, 18),     # Ingest
+        (172, 26, 188, 42),     # Analyze
+        (196, 84, 212, 100),    # Brief
+        (172, 142, 188, 158),   # Fix
+        (114, 166, 130, 182),   # Compile
+        (56, 142, 72, 158),     # QA
+        (32, 84, 48, 100),      # Release
+        (56, 26, 72, 42)        # Report
+    ]
+    
+    # SVG lines setup
+    svg_lines = ""
+    active_idx = -1
+    for idx, status in enumerate(task_statuses):
+        if status == "Running":
+            active_idx = idx
+            
+    if active_idx != -1:
+        tx, ty = positions[active_idx][2], positions[active_idx][3]
+        svg_lines = f"<line x1='130' y1='100' x2='{tx}' y2='{ty}' stroke='#8B5CF6' stroke-width='2' stroke-dasharray='3 3' style='animation: dash 1s linear infinite;' />"
+
+    orbit_html = f"""
+    <div style='position: relative; width: 260px; height: 200px; margin: 0 auto;'>
+        <svg style='position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;'>
+            <circle cx='130' cy='100' r='82' fill='none' stroke='#334155' stroke-width='1.5' stroke-dasharray='4 4' />
+            {svg_lines}
+        </svg>
+        <div style='width: 48px; height: 48px; position: absolute; top: 76px; left: 106px; border-radius: 50%; background: radial-gradient(circle, #3B82F6 0%, #1E40AF 100%); display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 0 20px rgba(59, 130, 246, 0.6); z-index: 10; animation: pulse-glow 2s infinite;'>
+            🤖
+        </div>
+    """
     
     for idx, (label, emoji, status) in enumerate(zip(labels, emojis, task_statuses)):
+        left, top, _, _ = positions[idx]
         if status == "Completed":
-            color = "#10B981"  # Emerald Green
-            bg = "rgba(16, 185, 129, 0.15)"
             border = "2px solid #10B981"
-            text_color = "#10B981"
+            bg = "rgba(16, 185, 129, 0.15)"
+            color = "#10B981"
             anim = ""
         elif status == "Running":
-            color = "#8B5CF6"  # Purple
-            bg = "rgba(139, 92, 246, 0.2)"
             border = "2px solid #8B5CF6"
-            text_color = "#A78BFA"
+            bg = "rgba(139, 92, 246, 0.2)"
+            color = "#A78BFA"
             anim = "animation: pulse-glow 1.5s infinite;"
         else:
-            color = "#4B5563"  # Gray
+            border = "1.5px solid #4B5563"
             bg = "#1E293B"
-            border = "2px solid #4B5563"
-            text_color = "#9CA3AF"
+            color = "#9CA3AF"
             anim = ""
             
-        # Draw node
-        html_tasks += f"""
-        <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-            <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: {bg}; border: {border}; color: {text_color}; {anim}'>
-                {emoji}
-            </div>
-            <span style='font-size: 10px; font-weight: bold; color: {text_color}; margin-top: 6px; white-space: nowrap;'>{label}</span>
+        orbit_html += f"""
+        <div style='width: 32px; height: 32px; position: absolute; top: {top}px; left: {left}px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: {bg}; border: {border}; color: {color}; z-index: 5; {anim}' title='{label}'>
+            {emoji}
         </div>
         """
-        
-        # Draw connector line if not the last node
-        if idx < len(labels) - 1:
-            next_status = task_statuses[idx + 1]
-            if status == "Completed" and next_status in ("Completed", "Running"):
-                line_color = "#10B981"
-                line_style = "solid"
-            elif status == "Completed" or next_status == "Running":
-                line_color = "#8B5CF6"
-                line_style = "dashed"
-            else:
-                line_color = "#374151"
-                line_style = "dotted"
-                
-            html_tasks += f"<div style='flex-grow: 1; height: 0; border-top: 2px {line_style} {line_color}; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>"
+    orbit_html += "</div>"
+    
+    # Generate Grid Cards
+    cards_html = "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 15px; width: 100%;'>"
+    for idx, (label, emoji, status) in enumerate(zip(labels, emojis, task_statuses)):
+        if status == "Completed":
+            badge_color = "#10B981"
+            badge_bg = "rgba(16, 185, 129, 0.1)"
+            status_text = "Done"
+            border_left = "3px solid #10B981"
+        elif status == "Running":
+            badge_color = "#8B5CF6"
+            badge_bg = "rgba(139, 92, 246, 0.15)"
+            status_text = "Active"
+            border_left = "3px solid #8B5CF6"
+        else:
+            badge_color = "#6B7280"
+            badge_bg = "rgba(107, 114, 128, 0.05)"
+            status_text = "Pending"
+            border_left = "3px solid #374151"
             
-    html_tasks += "</div>"
+        cards_html += f"""
+        <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: {border_left}; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+            <div style='display: flex; align-items: center;'>
+                <span style='margin-right: 6px; font-size: 13px;'>{emoji}</span>
+                <span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>{label}</span>
+            </div>
+            <span style='font-size: 9px; font-weight: bold; background-color: {badge_bg}; color: {badge_color}; padding: 1px 5px; border-radius: 4px;'>{status_text}</span>
+        </div>
+        """
+    cards_html += "</div>"
+    
+    html_tasks = f"""
+    <div style='display: flex; flex-direction: column; align-items: center; width: 100%;'>
+        {orbit_html}
+        {cards_html}
+    </div>
+    """
     
     # Generate HTML progress bar
     html_progress = f"""
@@ -219,9 +266,14 @@ def run_assistant(project_path, github_link, jira_link, raw_text):
 # Custom CSS for setting fixed heights and enforcing single-screen layouts
 custom_css = """
 @keyframes pulse-glow {
-    0% { transform: scale(1); box-shadow: 0 0 2px #8B5CF6; }
-    50% { transform: scale(1.08); box-shadow: 0 0 12px #8B5CF6; }
-    100% { transform: scale(1); box-shadow: 0 0 2px #8B5CF6; }
+    0% { transform: scale(1); box-shadow: 0 0 2px #3B82F6; }
+    50% { transform: scale(1.06); box-shadow: 0 0 18px #3B82F6; }
+    100% { transform: scale(1); box-shadow: 0 0 2px #3B82F6; }
+}
+@keyframes dash {
+    to {
+        stroke-dashoffset: -20;
+    }
 }
 .gradio-container {
     background-color: #0B0F19 !important;
@@ -252,6 +304,7 @@ custom_css = """
     padding: 15px !important;
     min-height: 640px !important;
     max-height: 640px !important;
+    position: relative !important;
 }
 .terminal-textarea textarea {
     font-family: 'Fira Code', 'Courier New', monospace !important;
@@ -260,19 +313,45 @@ custom_css = """
     border: 1px solid #1F2937 !important;
     font-size: 11px !important;
     line-height: 1.4 !important;
-    height: 520px !important;
-    max-height: 520px !important;
+    height: 540px !important;
+    max-height: 540px !important;
     overflow-y: auto !important;
 }
 .report-markdown {
-    height: 520px !important;
-    max-height: 520px !important;
+    height: 540px !important;
+    max-height: 540px !important;
     overflow-y: auto !important;
     padding: 10px !important;
     background-color: #1E293B !important;
     border: 1px solid #334155 !important;
     border-radius: 8px !important;
 }
+"""
+
+head_html = """
+<script>
+    console.log("Terminal Auto-Scroll Utility Mounted via HTML Head.");
+    
+    // Listen to scroll events on any textarea inside .terminal-textarea
+    document.addEventListener("scroll", function(e) {
+        if (e.target.tagName === "TEXTAREA" && (e.target.classList.contains("terminal-textarea") || e.target.closest(".terminal-textarea"))) {
+            var el = e.target;
+            // If user is within 40px of bottom, keep autoscroll enabled
+            var isAtBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 40;
+            el.dataset.autoscroll = isAtBottom ? "true" : "false";
+        }
+    }, { capture: true, passive: true });
+
+    setInterval(function() {
+        var textareas = document.querySelectorAll(".terminal-textarea textarea");
+        textareas.forEach(function(el) {
+            // Default to true if not explicitly set to false by user scrolling up
+            if (el.dataset.autoscroll !== "false") {
+                el.scrollTop = el.scrollHeight;
+            }
+        });
+    }, 300);
+</script>
 """
 
 with gr.Blocks(title="Android Engineering Assistant Dashboard") as demo:
@@ -318,7 +397,7 @@ with gr.Blocks(title="Android Engineering Assistant Dashboard") as demo:
             submit_btn = gr.Button("🚀 Run Assistant", variant="primary")
             clear_btn = gr.Button("🧹 Clear Inputs")
             
-        # Column 2: Dashboard Panel (3% scale width)
+        # Column 2: Dashboard Panel (30% scale width)
         with gr.Column(scale=3, elem_classes=["dashboard-panel"]):
             gr.Markdown("### 📊 Workflow Execution Dashboard")
             progress_bar_html = gr.HTML(
@@ -335,45 +414,56 @@ with gr.Blocks(title="Android Engineering Assistant Dashboard") as demo:
             
             task_list_html = gr.HTML(
                 value="""
-                <div style='display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 15px; margin-bottom: 15px; padding: 10px 0; overflow-x: auto; scrollbar-width: none;'>
-                    <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                        <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>📥</div>
-                        <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>Ingest</span>
+                <div style='display: flex; flex-direction: column; align-items: center; width: 100%;'>
+                    <div style='position: relative; width: 260px; height: 200px; margin: 0 auto;'>
+                        <svg style='position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;'>
+                            <circle cx='130' cy='100' r='82' fill='none' stroke='#334155' stroke-width='1.5' stroke-dasharray='4 4' />
+                        </svg>
+                        <div style='width: 48px; height: 48px; position: absolute; top: 76px; left: 106px; border-radius: 50%; background: radial-gradient(circle, #3B82F6 0%, #1E40AF 100%); display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 0 20px rgba(59, 130, 246, 0.6); z-index: 10;'>
+                            🤖
+                        </div>
+                        <div style='width: 32px; height: 32px; position: absolute; top: 2px; left: 114px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='Ingest'>📥</div>
+                        <div style='width: 32px; height: 32px; position: absolute; top: 26px; left: 172px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='Analyze'>🔍</div>
+                        <div style='width: 32px; height: 32px; position: absolute; top: 84px; left: 196px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='Brief'>📝</div>
+                        <div style='width: 32px; height: 32px; position: absolute; top: 142px; left: 172px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='Fix'>🛠️</div>
+                        <div style='width: 32px; height: 32px; position: absolute; top: 166px; left: 114px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='Compile'>⚙️</div>
+                        <div style='width: 32px; height: 32px; position: absolute; top: 142px; left: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='QA'>📱</div>
+                        <div style='width: 32px; height: 32px; position: absolute; top: 84px; left: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='Release'>🚀</div>
+                        <div style='width: 32px; height: 32px; position: absolute; top: 26px; left: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='Report'>📋</div>
                     </div>
-                    <div style='flex-grow: 1; height: 0; border-top: 2px dotted #374151; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>
-                    <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                        <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>🔍</div>
-                        <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>Analyze</span>
-                    </div>
-                    <div style='flex-grow: 1; height: 0; border-top: 2px dotted #374151; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>
-                    <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                        <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>📝</div>
-                        <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>Brief</span>
-                    </div>
-                    <div style='flex-grow: 1; height: 0; border-top: 2px dotted #374151; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>
-                    <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                        <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>🛠️</div>
-                        <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>Fix</span>
-                    </div>
-                    <div style='flex-grow: 1; height: 0; border-top: 2px dotted #374151; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>
-                    <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                        <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>⚙️</div>
-                        <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>Compile</span>
-                    </div>
-                    <div style='flex-grow: 1; height: 0; border-top: 2px dotted #374151; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>
-                    <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                        <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>📱</div>
-                        <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>QA</span>
-                    </div>
-                    <div style='flex-grow: 1; height: 0; border-top: 2px dotted #374151; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>
-                    <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                        <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>🚀</div>
-                        <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>Release</span>
-                    </div>
-                    <div style='flex-grow: 1; height: 0; border-top: 2px dotted #374151; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>
-                    <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                        <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>📋</div>
-                        <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>Report</span>
+                    <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 15px; width: 100%;'>
+                        <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                            <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>📥</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>Ingest</span></div>
+                            <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                        </div>
+                        <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                            <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>🔍</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>Analyze</span></div>
+                            <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                        </div>
+                        <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                            <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>📝</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>Brief</span></div>
+                            <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                        </div>
+                        <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                            <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>🛠️</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>Fix</span></div>
+                            <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                        </div>
+                        <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                            <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>⚙️</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>Compile</span></div>
+                            <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                        </div>
+                        <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                            <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>📱</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>QA</span></div>
+                            <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                        </div>
+                        <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                            <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>🚀</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>Release</span></div>
+                            <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                        </div>
+                        <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                            <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>📋</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>Report</span></div>
+                            <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                        </div>
                     </div>
                 </div>
                 """
@@ -381,7 +471,7 @@ with gr.Blocks(title="Android Engineering Assistant Dashboard") as demo:
 
             active_agent_html = gr.HTML(
                 value="""
-                <div style='background-color: #1E293B; border-radius: 8px; padding: 10px 12px; border-left: 4px solid #8B5CF6; border: 1px solid #334155;'>
+                <div style='background-color: #1E293B; border-radius: 8px; padding: 10px 12px; border-left: 4px solid #3B82F6; border: 1px solid #334155;'>
                     <div style='font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: #9CA3AF; margin-bottom: 2px;'>Current Executor</div>
                     <div style='font-size: 14px; font-weight: bold; color: #FFFFFF;'>System Router</div>
                     <div style='font-size: 11px; color: #9CA3AF; margin-top: 3px;'>Awaiting kickoff...</div>
@@ -393,6 +483,13 @@ with gr.Blocks(title="Android Engineering Assistant Dashboard") as demo:
         with gr.Column(scale=4, elem_classes=["log-panel"]):
             with gr.Tabs() as right_tabs:
                 with gr.Tab("🖥️ Real-time Execution Stream"):
+                    gr.HTML(
+                        """
+                        <div style='position: absolute; top: 12px; right: 15px; z-index: 1000;'>
+                            <button onclick="var t=document.querySelector('.terminal-textarea textarea'); if(t) { navigator.clipboard.writeText(t.value); var b=document.getElementById('copy-btn'); b.innerText='✅ Copied!'; setTimeout(function(){b.innerText='📋 Copy Logs';}, 1500); }" id="copy-btn" style="background-color: #3B82F6; color: white; border: none; padding: 5px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: bold; transition: background-color 0.2s; box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);">📋 Copy Logs</button>
+                        </div>
+                        """
+                    )
                     logs_output = gr.Textbox(
                         label="Log Stream Output",
                         placeholder="Live logs will stream here line-by-line...",
@@ -417,45 +514,56 @@ with gr.Blocks(title="Android Engineering Assistant Dashboard") as demo:
 
     def reset_inputs():
         default_tasks = """
-        <div style='display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 15px; margin-bottom: 15px; padding: 10px 0; overflow-x: auto; scrollbar-width: none;'>
-            <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>📥</div>
-                <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>Ingest</span>
+        <div style='display: flex; flex-direction: column; align-items: center; width: 100%;'>
+            <div style='position: relative; width: 260px; height: 200px; margin: 0 auto;'>
+                <svg style='position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;'>
+                    <circle cx='130' cy='100' r='82' fill='none' stroke='#334155' stroke-width='1.5' stroke-dasharray='4 4' />
+                </svg>
+                <div style='width: 48px; height: 48px; position: absolute; top: 76px; left: 106px; border-radius: 50%; background: radial-gradient(circle, #3B82F6 0%, #1E40AF 100%); display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 0 20px rgba(59, 130, 246, 0.6); z-index: 10;'>
+                    🤖
+                </div>
+                <div style='width: 32px; height: 32px; position: absolute; top: 2px; left: 114px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='Ingest'>📥</div>
+                <div style='width: 32px; height: 32px; position: absolute; top: 26px; left: 172px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='Analyze'>🔍</div>
+                <div style='width: 32px; height: 32px; position: absolute; top: 84px; left: 196px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='Brief'>📝</div>
+                <div style='width: 32px; height: 32px; position: absolute; top: 142px; left: 172px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='Fix'>🛠️</div>
+                <div style='width: 32px; height: 32px; position: absolute; top: 166px; left: 114px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='Compile'>⚙️</div>
+                <div style='width: 32px; height: 32px; position: absolute; top: 142px; left: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='QA'>📱</div>
+                <div style='width: 32px; height: 32px; position: absolute; top: 84px; left: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='Release'>🚀</div>
+                <div style='width: 32px; height: 32px; position: absolute; top: 26px; left: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background-color: #1E293B; border: 1.5px solid #4B5563; color: #9CA3AF;' title='Report'>📋</div>
             </div>
-            <div style='flex-grow: 1; height: 0; border-top: 2px dotted #374151; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>
-            <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>🔍</div>
-                <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>Analyze</span>
-            </div>
-            <div style='flex-grow: 1; height: 0; border-top: 2px dotted #374151; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>
-            <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>📝</div>
-                <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>Brief</span>
-            </div>
-            <div style='flex-grow: 1; height: 0; border-top: 2px dotted #374151; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>
-            <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>🛠️</div>
-                <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>Fix</span>
-            </div>
-            <div style='flex-grow: 1; height: 0; border-top: 2px dotted #374151; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>
-            <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>⚙️</div>
-                <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>Compile</span>
-            </div>
-            <div style='flex-grow: 1; height: 0; border-top: 2px dotted #374151; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>
-            <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>📱</div>
-                <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>QA</span>
-            </div>
-            <div style='flex-grow: 1; height: 0; border-top: 2px dotted #374151; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>
-            <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>🚀</div>
-                <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>Release</span>
-            </div>
-            <div style='flex-grow: 1; height: 0; border-top: 2px dotted #374151; margin: 0 2px; min-width: 6px; margin-top: -16px;'></div>
-            <div style='display: flex; flex-direction: column; align-items: center; min-width: 52px; text-align: center;'>
-                <div style='width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background-color: #1E293B; border: 2px solid #4B5563; color: #9CA3AF;'>📋</div>
-                <span style='font-size: 10px; font-weight: bold; color: #9CA3AF; margin-top: 6px;'>Report</span>
+            <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 15px; width: 100%;'>
+                <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                    <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>📥</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>Ingest</span></div>
+                    <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                </div>
+                <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                    <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>🔍</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>Analyze</span></div>
+                    <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                </div>
+                <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                    <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>📝</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>Brief</span></div>
+                    <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                </div>
+                <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                    <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>🛠️</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>Fix</span></div>
+                    <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                </div>
+                <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                    <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>⚙️</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>Compile</span></div>
+                    <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                </div>
+                <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                    <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>📱</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>QA</span></div>
+                    <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                </div>
+                <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                    <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>🚀</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>Release</span></div>
+                    <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                </div>
+                <div style='background-color: #1E293B; border-radius: 6px; padding: 6px 10px; border-left: 3px solid #374151; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between;'>
+                    <div style='display: flex; align-items: center;'><span style='margin-right: 6px; font-size: 13px;'>📋</span><span style='font-size: 11px; font-weight: bold; color: #E2E8F0;'>Report</span></div>
+                    <span style='font-size: 9px; font-weight: bold; background-color: rgba(107,114,128,0.05); color: #6B7280; padding: 1px 5px; border-radius: 4px;'>Pending</span>
+                </div>
             </div>
         </div>
         """
@@ -483,7 +591,9 @@ with gr.Blocks(title="Android Engineering Assistant Dashboard") as demo:
         outputs=[project_path_input, github_input, jira_input, raw_input, task_list_html, progress_bar_html, active_agent_html, logs_output, final_report_md]
     )
 
+    # Script loaded via HTML head instead to prevent Gradio innerHTML warnings
+
 if __name__ == "__main__":
     demo.queue()
     # Share = False inside sandbox
-    demo.launch(server_name="0.0.0.0", share=False, css=custom_css)
+    demo.launch(server_name="0.0.0.0", share=False, css=custom_css, head=head_html)

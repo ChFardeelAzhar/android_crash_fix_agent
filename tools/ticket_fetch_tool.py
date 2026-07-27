@@ -46,26 +46,37 @@ class TicketFetchTool(BaseTool):
         )
 
     def _handle_github_issue(self, url: str) -> str:
-        # Regex to parse owner, repo, issue/pull number
-        # Example: https://github.com/Dev-Entity/tp-app/issues/12
-        # Example: https://github.com/Dev-Entity/tp-app/pull/15
-        match = re.search(r"github\.com/([^/]+)/([^/]+)/(issues|pull)/(\d+)", url)
-        if not match:
-            # Check for classic project card URL or direct project cards endpoint
-            card_match = re.search(r"card[s]?-(\d+)", url)
-            card_direct = re.search(r"projects/columns/cards/(\d+)", url)
-            card_id = None
-            if card_match:
-                card_id = card_match.group(1)
-            elif card_direct:
-                card_id = card_direct.group(1)
+        import urllib.parse
+        
+        # Unquote URL to decode query params (e.g. %7C -> |)
+        unquoted_url = urllib.parse.unquote(url)
+        
+        # Try matching GitHub Projects board pane issue pattern:
+        # e.g., issue=ChFardeelAzhar|CricScore|8
+        proj_match = re.search(r"[?&]issue=([^&|]+)[|/]([^&|]+)[|/](\d+)", unquoted_url)
+        
+        if proj_match:
+            owner, repo, number = proj_match.groups()
+        else:
+            # Fall back to standard issue/PR url regex
+            # Example: https://github.com/Dev-Entity/tp-app/issues/12
+            # Example: https://github.com/Dev-Entity/tp-app/pull/15
+            match = re.search(r"github\.com/([^/]+)/([^/]+)/(issues|pull)/(\d+)", unquoted_url)
+            if not match:
+                # Check for classic project card URL or direct project cards endpoint
+                card_match = re.search(r"card[s]?-(\d+)", unquoted_url)
+                card_direct = re.search(r"projects/columns/cards/(\d+)", unquoted_url)
+                card_id = None
+                if card_match:
+                    card_id = card_match.group(1)
+                elif card_direct:
+                    card_id = card_direct.group(1)
 
-            if card_id:
-                return self._fetch_github_card(card_id)
-            
-            return f"Error: Could not parse GitHub issue/PR URL from '{url}'. Expected format: https://github.com/owner/repo/issues/number"
-
-        owner, repo, _, number = match.groups()
+                if card_id:
+                    return self._fetch_github_card(card_id)
+                
+                return f"Error: Could not parse GitHub issue/PR URL from '{url}'. Expected format: https://github.com/owner/repo/issues/number"
+            owner, repo, _, number = match.groups()
         token = os.environ.get("GITHUB_TOKEN")
         headers = {
             "Accept": "application/vnd.github.v3+json"

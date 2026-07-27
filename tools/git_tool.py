@@ -2,6 +2,8 @@ import os
 import re
 import shutil
 import subprocess
+import urllib.request
+import json
 from pathlib import Path
 from typing import Type
 from crewai.tools import BaseTool
@@ -70,6 +72,17 @@ class GitTool(BaseTool):
         except Exception:
             return ""
 
+    def _parse_owner_repo(self, repo_url: str):
+        # repo_url is like "https://github.com/ChFardeelAzhar/CricScore"
+        m = re.search(r"github\.com/([^/]+)/([^/]+)", repo_url)
+        if m:
+            owner = m.group(1)
+            repo = m.group(2)
+            if repo.endswith(".git"):
+                repo = repo[:-4]
+            return owner, repo
+        return None
+
     def _run(self, command_type: str, android_project_path: str, branch_name: str = "", commit_message: str = "", pr_title: str = "", pr_body: str = "") -> str:
         # Validate inputs
         if not (self._sanitize_input(android_project_path) and self._sanitize_input(branch_name) and self._sanitize_input(commit_message)):
@@ -95,7 +108,7 @@ class GitTool(BaseTool):
                 res = subprocess.run(["git", "status"], cwd=str(proj_path), capture_output=True, text=True, timeout=10)
                 return f"Git status:\nStdout: {res.stdout}\nStderr: {res.stderr}"
             except Exception as e:
-                return f"Error running git status: {str(e)}"
+                return f"Error getting Git status: {str(e)}"
 
         elif command_type == "create_branch":
             if not branch_name:
@@ -191,6 +204,67 @@ class GitTool(BaseTool):
             pr_desc_path = output_dir / "pr_description.md"
             pr_desc_path.write_text(f"# {title}\n\n{body}", encoding="utf-8")
 
+            # Try to create PR automatically if GITHUB_TOKEN is available
+            pr_api_status = ""
+            github_token = os.getenv("GITHUB_TOKEN")
+            
+            # If not in env, try reading from .env file directly (just in case)
+            if not github_token:
+                try:
+                    env_path = Path(".env").resolve()
+                    if env_path.is_file():
+                        content = env_path.read_text(encoding="utf-8")
+                        m = re.search(r"^GITHUB_TOKEN\s*=\s*(.+)$", content, re.MULTILINE)
+                        if m:
+                            github_token = m.group(1).strip().strip('"').strip("'")
+                except Exception:
+                    pass
+
+            if github_token and repo_url:
+                parsed = self._parse_owner_repo(repo_url)
+                if parsed:
+                    owner, repo = parsed
+                    
+                    api_url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+                    headers = {
+                        "Authorization": f"Bearer {github_token}",
+                        "Accept": "application/vnd.github+json",
+                        "X-GitHub-Api-Version": "2022-11-28",
+                        "Content-Type": "application/json",
+                        "User-Agent": "CrewAI-PR-Reviewer-Agent"
+                    }
+                    # Default base is main, head is current branch
+                    data = {
+                        "title": title,
+                        "body": body,
+                        "head": curr_branch,
+                        "base": "main"
+                    }
+                    
+                    try:
+                        req = urllib.request.Request(
+                            api_url, 
+                            data=json.dumps(data).encode("utf-8"), 
+                            headers=headers,
+                            method="POST"
+                        )
+                        with urllib.request.urlopen(req, timeout=15) as response:
+                            res_body = json.loads(response.read().decode("utf-8"))
+                            pr_url = res_body.get("html_url", "")
+                            pr_api_status = f"✅ Pull Request automatically created on GitHub: {pr_url}"
+                    except urllib.error.HTTPError as e:
+                        try:
+                            error_msg = json.loads(e.read().decode("utf-8")).get("message", str(e))
+                        except Exception:
+                            error_msg = str(e)
+                        pr_api_status = f"⚠️ GitHub PR API Call failed: {error_msg} (PR may already exist or token permissions are restricted)."
+                    except Exception as e:
+                        pr_api_status = f"⚠️ GitHub PR API Call failed: {str(e)}"
+                else:
+                    pr_api_status = "⚠️ Could not parse Owner/Repo from Git remote URL."
+            else:
+                pr_api_status = "ℹ️ GITHUB_TOKEN is not configured in `.env`. Automated PR creation skipped. Please add GITHUB_TOKEN to `.env` to automate PR creation."
+
             # Write submit shell script (for manual backup)
             script_path = output_dir / "submit_pr.sh"
             script_content = f"""#!/bin/bash
@@ -211,6 +285,7 @@ echo "--------------------------------------------------------"
                 f"Push Stdout: {push_stdout}\n"
                 f"Push Stderr: {push_stderr}\n"
                 f"PR Description markdown file created at output/pr_description.md\n"
+                f"PR API Status: {pr_api_status}\n"
                 f"Compare/PR creation URL: {compare_url}"
             )
 

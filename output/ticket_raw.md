@@ -1,16 +1,1 @@
-# Raw Input Ticket
-- **Source Type:** Raw Text
-
-## Content
-Title : Toss Screen Manual Toss not handled.
-
-Description : In the Toss screen there should be a manuall system also in which user can select by its self who won the toss, currently user have to do the toss with coin on the toss screen.
-
-Steps to Reproduced :
-Click Start New Match
-Do match setup and click on proceed to toss
-Observe there is no manuall system to select who won the toss.
-
----
-
-*Resolved source tracker type: `raw_text`*
+Error: Exception occurred while contacting GitHub REST API: HTTPSConnectionPool(host='api.github.com', port=443): Max retries exceeded with url: /repos/ChFardeelAzhar/CricScore/issues/8 (Caused by NameResolutionError("HTTPSConnection(host='api.github.com', port=443): Failed to resolve 'api.github.com' ([Errno 8] nodename nor servname provided, or not known)"))
